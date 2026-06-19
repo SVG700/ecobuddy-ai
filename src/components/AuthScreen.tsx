@@ -1,11 +1,81 @@
 'use client';
 
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 
 interface AuthScreenProps {
   onAuthComplete: (profile: any) => void;
 }
+
+const mapAuthError = (err: any): string => {
+  if (!err) return 'Something went wrong. Please retry.';
+  
+  const message = (typeof err === 'string' 
+    ? err 
+    : err.message || err.error_description || JSON.stringify(err)
+  ).toLowerCase();
+
+  if (
+    message.includes('invalid grant') || 
+    message.includes('invalid credentials') || 
+    message.includes('invalid email') || 
+    message.includes('invalid password') ||
+    message.includes('password')
+  ) {
+    if (message.includes('short') || message.includes('at least 6 characters')) {
+      return 'Password must be at least 6 characters long.';
+    }
+    return 'Invalid email or password';
+  }
+  
+  if (
+    message.includes('user not found') || 
+    message.includes('account not found') || 
+    message.includes('user_not_found')
+  ) {
+    return 'Account not found';
+  }
+  
+  if (
+    message.includes('email not confirmed') || 
+    message.includes('confirm your email') ||
+    message.includes('unverified')
+  ) {
+    return 'Please verify your email address before signing in.';
+  }
+
+  if (
+    message.includes('network') || 
+    message.includes('failed to fetch') || 
+    message.includes('unable to connect') || 
+    message.includes('invalid path') ||
+    message.includes('request url') ||
+    message.includes('typeerror') ||
+    message.includes('fetch')
+  ) {
+    return 'Unable to connect. Please try again.';
+  }
+
+  if (
+    message.includes('rate limit') || 
+    message.includes('too many requests') || 
+    message.includes('429')
+  ) {
+    return 'Too many attempts. Please try again later.';
+  }
+
+  if (
+    message.includes('already registered') || 
+    message.includes('email_exists') ||
+    message.includes('user already exists')
+  ) {
+    return 'An account with this email already exists.';
+  }
+
+  return 'Something went wrong. Please retry.';
+};
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete }) => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -62,7 +132,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete }) => {
         if (error) throw error;
         if (data.user) {
           setSuccessMsg('Account created successfully! Please check your email for verification.');
-          // Auto login offline if email verification is bypassed or not strictly enforced
           if (data.session) {
             onAuthComplete(data.user);
           }
@@ -78,37 +147,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete }) => {
         }
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred during authentication.');
+      setError(mapAuthError(err));
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleDemoMode = () => {
-    // Standard mock profile
-    const defaultProfile = {
-      id: 'mock-user-123',
-      email: 'eco.buddy@example.com',
-      full_name: 'Alex Green',
-      points: 320,
-      current_streak: 5,
-      max_streak: 12,
-      carbon_saved_kg: 45.2,
-      goals: ['Use public transport 3x a week', 'Unplug chargers at night', 'Walk to nearby stores'],
-      created_at: new Date().toISOString()
-    };
-    if (!localStorage.getItem('eb_profile')) {
-      localStorage.setItem('eb_profile', JSON.stringify(defaultProfile));
-    }
-    onAuthComplete(getLocalProfile() || defaultProfile);
-  };
-
-  const getLocalProfile = () => {
-    try {
-      const p = localStorage.getItem('eb_profile');
-      return p ? JSON.parse(p) : null;
-    } catch {
-      return null;
     }
   };
 
@@ -179,17 +220,35 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete }) => {
             </div>
           )}
 
-          {error && (
-            <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-400">
-              {error}
-            </div>
-          )}
+          <AnimatePresence mode="wait">
+            {error && (
+              <motion.div
+                key="error-msg"
+                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+                className="flex items-start gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-400 shadow-sm"
+              >
+                <AlertCircle className="h-4.5 w-4.5 shrink-0 text-red-400 mt-0.5" />
+                <span>{error}</span>
+              </motion.div>
+            )}
 
-          {successMsg && (
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-400">
-              {successMsg}
-            </div>
-          )}
+            {successMsg && (
+              <motion.div
+                key="success-msg"
+                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+                className="flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-400 shadow-sm"
+              >
+                <CheckCircle2 className="h-4.5 w-4.5 shrink-0 text-emerald-400 mt-0.5" />
+                <span>{successMsg}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {!isForgotPassword && (
             <div className="flex justify-end text-xs">
@@ -198,6 +257,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete }) => {
                 onClick={() => {
                   setIsForgotPassword(true);
                   setError('');
+                  setSuccessMsg('');
                 }}
                 className="text-emerald-400 hover:text-emerald-300 transition focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none rounded px-1.5 py-0.5 cursor-pointer"
               >
@@ -209,56 +269,52 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 font-bold text-zinc-950 shadow-md shadow-emerald-500/15 hover:from-emerald-400 hover:to-teal-400 active:scale-98 transition disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none cursor-pointer"
+            className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 font-bold text-zinc-955 shadow-md shadow-emerald-500/15 hover:from-emerald-400 hover:to-teal-400 active:scale-[0.98] transition disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none cursor-pointer"
           >
-            {loading ? 'Processing...' : isForgotPassword ? 'Send Reset Link' : isSignUp ? 'Create Account' : 'Sign In'}
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-zinc-955" />
+                Processing...
+              </span>
+            ) : isForgotPassword ? (
+              'Send Reset Link'
+            ) : isSignUp ? (
+              'Create Account'
+            ) : (
+              'Sign In'
+            )}
           </button>
         </form>
 
-        <div className="mt-6 space-y-4">
-          <div className="flex items-center justify-between text-xs text-zinc-500">
-            <span className="h-px w-1/3 bg-zinc-800"></span>
-            <span>OR</span>
-            <span className="h-px w-1/3 bg-zinc-800"></span>
-          </div>
-
-          {/* Quick Sandbox Demo Login */}
-          <button
-            type="button"
-            onClick={handleDemoMode}
-            className="w-full rounded-xl border border-emerald-500/20 bg-emerald-500/5 py-3 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/10 active:scale-98 transition focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none cursor-pointer"
-          >
-            🚀 Launch Instant Demo Mode (No Setup)
-          </button>
-
-          <div className="text-center text-sm text-zinc-400">
-            {isForgotPassword ? (
+        <div className="mt-6 text-center text-sm text-zinc-400">
+          {isForgotPassword ? (
+            <button
+              type="button"
+              onClick={() => {
+                setIsForgotPassword(false);
+                setError('');
+                setSuccessMsg('');
+              }}
+              className="text-emerald-400 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none rounded px-1 cursor-pointer"
+            >
+              Back to Sign In
+            </button>
+          ) : (
+            <span>
+              {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
               <button
                 type="button"
                 onClick={() => {
-                  setIsForgotPassword(false);
+                  setIsSignUp(!isSignUp);
                   setError('');
+                  setSuccessMsg('');
                 }}
-                className="text-emerald-400 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none rounded px-1 cursor-pointer"
+                className="font-semibold text-emerald-400 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none rounded px-1 cursor-pointer"
               >
-                Back to Sign In
+                {isSignUp ? 'Sign In' : 'Sign Up'}
               </button>
-            ) : (
-              <span>
-                {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSignUp(!isSignUp);
-                    setError('');
-                  }}
-                  className="font-semibold text-emerald-400 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none rounded px-1 cursor-pointer"
-                >
-                  {isSignUp ? 'Sign In' : 'Sign Up'}
-                </button>
-              </span>
-            )}
-          </div>
+            </span>
+          )}
         </div>
 
       </div>
