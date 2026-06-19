@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from '../lib/db';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
@@ -101,9 +101,14 @@ export default function Home() {
     applyTheme(newDark);
   };
 
+  const profileRef = useRef(profile);
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
+
   // Fetch all user specific details
-  const refreshUserData = async () => {
-    if (!profile) return;
+  const refreshUserData = useCallback(async () => {
+    if (!profileRef.current) return;
     try {
       const [
         t, f, e, cs, ch, uc, ac, ua, wr, p
@@ -133,14 +138,15 @@ export default function Home() {
     } catch (err) {
       console.error('Error refreshing application data:', err);
     }
-  };
+  }, []);
 
   // Trigger refresh on profile change
+  const profileId = profile?.id;
   useEffect(() => {
-    if (profile) {
+    if (profileId) {
       refreshUserData();
     }
-  }, [profile?.id]);
+  }, [profileId, refreshUserData]);
 
   const handleAuthComplete = (newProfile: UserProfile) => {
     setProfile(newProfile);

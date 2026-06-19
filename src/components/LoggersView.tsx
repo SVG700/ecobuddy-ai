@@ -10,6 +10,7 @@ import {
 import { FuelRecord, ElectricityRecord, FuelType } from '../lib/types';
 import { db } from '../lib/db';
 import { FUEL_EMISSION_FACTORS, ELECTRICITY_EMISSION_FACTOR } from '../lib/calculations';
+import Image from 'next/image';
 
 interface LoggersViewProps {
   fuelRecords: FuelRecord[];
@@ -291,9 +292,12 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
                     />
                     {fuelPreviewUrl ? (
                       <div className="space-y-2">
-                        <img 
+                        <Image 
                           src={fuelPreviewUrl} 
                           alt="Receipt preview" 
+                          width={64}
+                          height={64}
+                          unoptimized
                           className="h-16 w-auto mx-auto rounded-lg object-cover border border-zinc-200 dark:border-zinc-800" 
                         />
                         <span className="block text-[10px] font-bold text-blue-500 flex items-center justify-center gap-1">
@@ -536,9 +540,12 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
                     />
                     {billPreviewUrl ? (
                       <div className="space-y-2">
-                        <img 
+                        <Image 
                           src={billPreviewUrl} 
                           alt="Bill preview" 
+                          width={64}
+                          height={64}
+                          unoptimized
                           className="h-16 w-auto mx-auto rounded-lg object-cover border border-zinc-200 dark:border-zinc-800" 
                         />
                         <span className="block text-[10px] font-bold text-emerald-500 flex items-center justify-center gap-1">

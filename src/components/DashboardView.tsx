@@ -59,7 +59,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return () => {
       window.removeEventListener('achievement-unlocked', handleUnlock);
     };
-  }, []);
+  }, [refreshData]);
 
   // Journey Level Calculations
   const getJourneyLevel = (pts: number) => {

@@ -52,7 +52,7 @@ export const ChallengesView: React.FC<ChallengesViewProps> = ({
     return () => {
       window.removeEventListener('achievement-unlocked', handleUnlock);
     };
-  }, []);
+  }, [refreshData]);
 
   // Split user challenges
   const activeUCs = userChallenges.filter(uc => uc.status === 'active');
