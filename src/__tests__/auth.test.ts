@@ -1,24 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Simple localStorage mock for Node environment
-const localStorageMock = (() => {
-  let store: Record<string, string> = {};
-  return {
-    getItem: (key: string) => store[key] || null,
-    setItem: (key: string, value: string) => {
-      store[key] = value.toString();
-    },
-    removeItem: (key: string) => {
-      delete store[key];
-    },
-    clear: () => {
-      store = {};
-    }
-  };
-})();
-
-global.localStorage = localStorageMock as any;
-
 describe('Sandbox Auth and Session Sync', () => {
   beforeEach(() => {
     localStorage.clear();

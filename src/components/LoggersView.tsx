@@ -256,6 +256,8 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
+                    role="status"
+                    aria-live="polite"
                     className="absolute inset-0 z-20 bg-zinc-955/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center"
                   >
                     <div className="relative h-20 w-32 border-2 border-blue-500/30 rounded-lg overflow-hidden flex items-center justify-center">
@@ -321,6 +323,9 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
+                      role="region"
+                      aria-live="polite"
+                      aria-label="Fuel Scanner Insights"
                       className="p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 space-y-2 overflow-hidden"
                     >
                       <div className="flex items-center justify-between">
@@ -411,7 +416,7 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
                   whileTap={{ scale: 0.98 }}
                   type="submit"
                   disabled={fuelLoading}
-                  className="w-full py-3 bg-blue-500 hover:bg-blue-600 font-extrabold text-zinc-950 rounded-xl transition shadow-md shadow-blue-500/10 disabled:opacity-50 cursor-pointer"
+                  className="w-full py-3 bg-blue-500 hover:bg-blue-600 font-extrabold text-zinc-950 rounded-xl transition shadow-md shadow-blue-500/10 disabled:opacity-50 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
                 >
                   {fuelLoading ? 'Adding...' : 'Add Fuel Log'}
                 </motion.button>
@@ -504,6 +509,8 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
+                    role="status"
+                    aria-live="polite"
                     className="absolute inset-0 z-20 bg-zinc-955/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center"
                   >
                     <div className="relative h-20 w-32 border-2 border-emerald-500/30 rounded-lg overflow-hidden flex items-center justify-center">
@@ -569,6 +576,9 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
+                      role="region"
+                      aria-live="polite"
+                      aria-label="Electricity Scanner Insights"
                       className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10 space-y-2 overflow-hidden"
                     >
                       <div className="flex items-center justify-between">
@@ -625,7 +635,7 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
                   whileTap={{ scale: 0.98 }}
                   type="submit"
                   disabled={elecLoading}
-                  className="w-full py-3 bg-yellow-500 hover:bg-yellow-600 font-extrabold text-zinc-950 rounded-xl transition shadow-md shadow-yellow-500/10 disabled:opacity-50 cursor-pointer"
+                  className="w-full py-3 bg-yellow-500 hover:bg-yellow-600 font-extrabold text-zinc-950 rounded-xl transition shadow-md shadow-yellow-500/10 disabled:opacity-50 cursor-pointer focus-visible:ring-2 focus-visible:ring-yellow-500 focus-visible:outline-none"
                 >
                   {elecLoading ? 'Adding...' : 'Add Bill Log'}
                 </motion.button>

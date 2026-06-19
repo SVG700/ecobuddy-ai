@@ -6,7 +6,7 @@ import {
   Sparkles, Calendar, History, 
   Printer, Clipboard, FileText, ChevronRight, Leaf 
 } from 'lucide-react';
-import { WeeklyReport, Trip, FuelRecord, ElectricityRecord } from '../lib/types';
+import { WeeklyReport, Trip, FuelRecord, ElectricityRecord, UserProfile } from '../lib/types';
 import { db } from '../lib/db';
 import { generateWeeklyReportAI } from '../lib/gemini';
 
@@ -15,7 +15,7 @@ interface WeeklyReportViewProps {
   trips: Trip[];
   fuelRecords: FuelRecord[];
   electricityRecords: ElectricityRecord[];
-  profile: any;
+  profile: UserProfile | null;
   refreshData: () => void;
 }
 

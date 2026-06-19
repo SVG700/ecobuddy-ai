@@ -124,10 +124,11 @@ Make it inspiring, highly personalized, and direct. Keep the length moderate.`;
     const text = result.response.text();
 
     return NextResponse.json({ text });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error generating report with Gemini API:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

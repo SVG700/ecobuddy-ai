@@ -28,12 +28,12 @@ export const ChallengesView: React.FC<ChallengesViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'challenges' | 'achievements'>('challenges');
   const [claimingId, setClaimingId] = useState<string | null>(null);
-  const [unlockToast, setUnlockToast] = useState<any>(null);
+  const [unlockToast, setUnlockToast] = useState<Achievement | null>(null);
 
   // Setup listener for achievement unlocking event
   useEffect(() => {
     const handleUnlock = (e: Event) => {
-      const achievement = (e as CustomEvent).detail;
+      const achievement = (e as CustomEvent<Achievement>).detail;
       // Trigger confetti
       confetti({
         particleCount: 150,
@@ -123,6 +123,8 @@ export const ChallengesView: React.FC<ChallengesViewProps> = ({
       <AnimatePresence>
         {unlockToast && (
           <motion.div 
+            role="status"
+            aria-live="polite"
             initial={{ opacity: 0, y: -40, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}

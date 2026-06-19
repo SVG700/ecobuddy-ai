@@ -4,22 +4,34 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { UserProfile } from '../lib/types';
+import { db } from '../lib/db';
 
 interface AuthScreenProps {
-  onAuthComplete: (profile: any) => void;
+  onAuthComplete: (profile: UserProfile) => void;
 }
 
-const mapAuthError = (err: any): string => {
+const mapAuthError = (err: unknown): string => {
   if (!err) return 'Something went wrong. Please retry.';
   
-  const message = (typeof err === 'string' 
-    ? err 
-    : err.message || err.error_description || JSON.stringify(err)
-  ).toLowerCase();
+  let message = '';
+  if (typeof err === 'string') {
+    message = err.toLowerCase();
+  } else if (err && typeof err === 'object') {
+    const errorObj = err as Record<string, unknown>;
+    message = (
+      typeof errorObj.message === 'string' ? errorObj.message : 
+      typeof errorObj.error_description === 'string' ? errorObj.error_description : 
+      typeof errorObj.error === 'string' ? errorObj.error : 
+      JSON.stringify(err)
+    ).toLowerCase();
+  } else {
+    message = String(err).toLowerCase();
+  }
 
   if (
     message.includes('invalid grant') || 
-    message.includes('invalid credentials') || 
+    message.includes('credentials') || 
     message.includes('invalid email') || 
     message.includes('invalid password') ||
     message.includes('password')
@@ -133,7 +145,23 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete }) => {
         if (data.user) {
           setSuccessMsg('Account created successfully! Please check your email for verification.');
           if (data.session) {
-            onAuthComplete(data.user);
+            let profile: UserProfile;
+            try {
+              profile = await db.getProfile();
+            } catch (e) {
+              profile = {
+                id: data.user.id,
+                email: data.user.email || email,
+                full_name: fullName || data.user.user_metadata?.full_name || 'Eco Explorer',
+                points: 0,
+                current_streak: 0,
+                max_streak: 0,
+                carbon_saved_kg: 0,
+                goals: [],
+                created_at: data.user.created_at || new Date().toISOString()
+              };
+            }
+            onAuthComplete(profile);
           }
         }
       } else {
@@ -143,10 +171,26 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete }) => {
         });
         if (error) throw error;
         if (data.user) {
-          onAuthComplete(data.user);
+          let profile: UserProfile;
+          try {
+            profile = await db.getProfile();
+          } catch (e) {
+            profile = {
+              id: data.user.id,
+              email: data.user.email || email,
+              full_name: data.user.user_metadata?.full_name || 'Eco Explorer',
+              points: 0,
+              current_streak: 0,
+              max_streak: 0,
+              carbon_saved_kg: 0,
+              goals: [],
+              created_at: data.user.created_at || new Date().toISOString()
+            };
+          }
+          onAuthComplete(profile);
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(mapAuthError(err));
     } finally {
       setLoading(false);
@@ -224,13 +268,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete }) => {
             {error && (
               <motion.div
                 key="error-msg"
+                role="alert"
+                aria-live="assertive"
                 initial={{ opacity: 0, y: -10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
                 className="flex items-start gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-400 shadow-sm"
               >
-                <AlertCircle className="h-4.5 w-4.5 shrink-0 text-red-400 mt-0.5" />
+                <AlertCircle className="h-4.5 w-4.5 shrink-0 text-red-400 mt-0.5" aria-hidden="true" />
                 <span>{error}</span>
               </motion.div>
             )}
@@ -238,13 +284,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete }) => {
             {successMsg && (
               <motion.div
                 key="success-msg"
+                role="status"
+                aria-live="polite"
                 initial={{ opacity: 0, y: -10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
                 className="flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-400 shadow-sm"
               >
-                <CheckCircle2 className="h-4.5 w-4.5 shrink-0 text-emerald-400 mt-0.5" />
+                <CheckCircle2 className="h-4.5 w-4.5 shrink-0 text-emerald-400 mt-0.5" aria-hidden="true" />
                 <span>{successMsg}</span>
               </motion.div>
             )}

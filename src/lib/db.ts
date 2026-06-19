@@ -322,13 +322,13 @@ const getInitialMockData = () => {
 };
 
 // Local storage management helpers
-const getLocal = (key: string, defaultValue: any) => {
+const getLocal = <T>(key: string, defaultValue: T): T => {
   if (typeof window === 'undefined') return defaultValue;
   const val = localStorage.getItem(key);
-  return val ? JSON.parse(val) : defaultValue;
+  return val ? (JSON.parse(val) as T) : defaultValue;
 };
 
-const setLocal = (key: string, value: any) => {
+const setLocal = <T>(key: string, value: T): void => {
   if (typeof window !== 'undefined') {
     localStorage.setItem(key, JSON.stringify(value));
   }
@@ -371,7 +371,9 @@ export const db = {
       if (error) throw error;
       return data;
     } else {
-      return getLocal('eb_profile', null);
+      const profile = getLocal<UserProfile | null>('eb_profile', null);
+      if (!profile) throw new Error('Not authenticated');
+      return profile;
     }
   },
 
@@ -390,7 +392,7 @@ export const db = {
       if (error) throw error;
       return data;
     } else {
-      const profile = getLocal('eb_profile', null);
+      const profile = getLocal<UserProfile | null>('eb_profile', null);
       if (!profile) throw new Error('No profile found');
       
       const updated = { ...profile, ...updates };
@@ -414,7 +416,7 @@ export const db = {
       if (error) throw error;
       return data;
     } else {
-      return getLocal('eb_trips', []);
+      return getLocal<Trip[]>('eb_trips', []);
     }
   },
 
@@ -441,8 +443,8 @@ export const db = {
       if (error) throw error;
       return data;
     } else {
-      const profile = getLocal('eb_profile', null);
-      const trips = getLocal('eb_trips', []);
+      const profile = getLocal<UserProfile | null>('eb_profile', null);
+      const trips = getLocal<Trip[]>('eb_trips', []);
       
       const newTrip: Trip = {
         id: `trip-${Date.now()}`,
@@ -495,7 +497,7 @@ export const db = {
 
       return data;
     } else {
-      const trips = getLocal('eb_trips', []);
+      const trips = getLocal<Trip[]>('eb_trips', []);
       const index = trips.findIndex((t: Trip) => t.id === tripId);
       if (index === -1) throw new Error('Trip not found');
 
@@ -533,7 +535,7 @@ export const db = {
       if (error) throw error;
       return data;
     } else {
-      return getLocal('eb_fuel', []);
+      return getLocal<FuelRecord[]>('eb_fuel', []);
     }
   },
 
@@ -564,8 +566,8 @@ export const db = {
       await this.updateDailyScoreAndCarbonSaved(co2, 0, 'car'); // fuel is car emissions
       return data;
     } else {
-      const profile = getLocal('eb_profile', null);
-      const fuelRecords = getLocal('eb_fuel', []);
+      const profile = getLocal<UserProfile | null>('eb_profile', null);
+      const fuelRecords = getLocal<FuelRecord[]>('eb_fuel', []);
 
       const newRecord: FuelRecord = {
         id: `fuel-${Date.now()}`,
@@ -596,7 +598,7 @@ export const db = {
       if (error) throw error;
       return data;
     } else {
-      return getLocal('eb_electricity', []);
+      return getLocal<ElectricityRecord[]>('eb_electricity', []);
     }
   },
 
@@ -627,8 +629,8 @@ export const db = {
       await this.updateDailyScoreAndCarbonSaved(co2, 0, 'walking'); // walking triggers dummy grid update
       return data;
     } else {
-      const profile = getLocal('eb_profile', null);
-      const electricityRecords = getLocal('eb_electricity', []);
+      const profile = getLocal<UserProfile | null>('eb_profile', null);
+      const electricityRecords = getLocal<ElectricityRecord[]>('eb_electricity', []);
 
       const newRecord: ElectricityRecord = {
         id: `elec-${Date.now()}`,
@@ -677,7 +679,7 @@ export const db = {
       if (error) throw error;
       return data;
     } else {
-      return getLocal('eb_user_challenges', []);
+      return getLocal<UserChallenge[]>('eb_user_challenges', []);
     }
   },
 
@@ -701,8 +703,8 @@ export const db = {
       if (error) throw error;
       return data;
     } else {
-      const profile = getLocal('eb_profile', null);
-      const userChallenges = getLocal('eb_user_challenges', []);
+      const profile = getLocal<UserProfile | null>('eb_profile', null);
+      const userChallenges = getLocal<UserChallenge[]>('eb_user_challenges', []);
 
       // Check if already active
       const existing = userChallenges.find(
@@ -760,7 +762,7 @@ export const db = {
 
       return data;
     } else {
-      const userChallenges = getLocal('eb_user_challenges', []);
+      const userChallenges = getLocal<UserChallenge[]>('eb_user_challenges', []);
       const index = userChallenges.findIndex(
         (uc: UserChallenge) => uc.challenge_id === challengeId && uc.status === 'active'
       );
@@ -779,7 +781,7 @@ export const db = {
       // Add points
       const challenge = DEFAULT_CHALLENGES.find(c => c.id === challengeId);
       if (challenge) {
-        const profile = getLocal('eb_profile', null);
+        const profile = getLocal<UserProfile | null>('eb_profile', null);
         if (profile) {
           const updatedProfile = {
             ...profile,
@@ -817,7 +819,7 @@ export const db = {
       if (error) throw error;
       return data;
     } else {
-      return getLocal('eb_user_achievements', []);
+      return getLocal<UserAchievement[]>('eb_user_achievements', []);
     }
   },
 
@@ -832,7 +834,7 @@ export const db = {
       if (error) throw error;
       return data;
     } else {
-      return getLocal('eb_weekly_reports', []);
+      return getLocal<WeeklyReport[]>('eb_weekly_reports', []);
     }
   },
 
@@ -862,8 +864,8 @@ export const db = {
       if (error) throw error;
       return data;
     } else {
-      const profile = getLocal('eb_profile', null);
-      const reports = getLocal('eb_weekly_reports', []);
+      const profile = getLocal<UserProfile | null>('eb_profile', null);
+      const reports = getLocal<WeeklyReport[]>('eb_weekly_reports', []);
 
       const newReport: WeeklyReport = {
         id: `report-${Date.now()}`,
@@ -901,7 +903,7 @@ export const db = {
       if (error) throw error;
       return data;
     } else {
-      return getLocal('eb_carbon_scores', []);
+      return getLocal<CarbonScore[]>('eb_carbon_scores', []);
     }
   },
 
@@ -1008,7 +1010,7 @@ export const db = {
           });
       }
     } else {
-      const profile = getLocal('eb_profile', null);
+      const profile = getLocal<UserProfile | null>('eb_profile', null);
       if (!profile) return;
 
       // Streak logic
@@ -1039,7 +1041,7 @@ export const db = {
       this.checkAndAwardAchievements(updatedProfile.points);
 
       // Local scores update
-      const scores = getLocal('eb_carbon_scores', []);
+      const scores = getLocal<CarbonScore[]>('eb_carbon_scores', []);
       const index = scores.findIndex((s: CarbonScore) => s.date === todayStr);
 
       if (index !== -1) {
@@ -1078,7 +1080,7 @@ export const db = {
 
   // Awards badge if score matches criteria
   checkAndAwardAchievements(points: number) {
-    const userAchievements = getLocal('eb_user_achievements', []);
+    const userAchievements = getLocal<UserAchievement[]>('eb_user_achievements', []);
     
     DEFAULT_ACHIEVEMENTS.forEach(ac => {
       if (points >= ac.points_required) {

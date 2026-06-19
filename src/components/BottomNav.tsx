@@ -24,8 +24,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab })
   ] as const;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-200 bg-white/90 pb-safe-bottom pt-2 px-2 shadow-[0_-4px_12px_rgba(0,0,0,0.04)] dark:border-zinc-800/80 dark:bg-zinc-950/90 backdrop-blur-lg md:relative md:border-t-0 md:bg-transparent md:shadow-none md:p-0 md:pt-4">
-      <div className="mx-auto flex max-w-lg justify-around items-center md:flex-col md:gap-3 md:max-w-none md:items-start md:px-4">
+    <nav 
+      aria-label="Main Navigation"
+      className="fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-200 bg-white/90 pb-safe-bottom pt-2 px-2 shadow-[0_-4px_12px_rgba(0,0,0,0.04)] dark:border-zinc-800/80 dark:bg-zinc-950/90 backdrop-blur-lg md:relative md:border-t-0 md:bg-transparent md:shadow-none md:p-0 md:pt-4"
+    >
+      <div 
+        role="tablist"
+        aria-label="Navigation Tabs"
+        className="mx-auto flex max-w-lg justify-around items-center md:flex-col md:gap-3 md:max-w-none md:items-start md:px-4"
+      >
         
         {/* Desktop Title Header in nav sidebar if we layout side-by-side */}
         <div className="hidden md:block mb-2">
@@ -38,8 +45,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab })
           return (
             <button
               key={item.id}
+              id={`${item.id}-tab`}
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`${item.id}-panel`}
               onClick={() => setActiveTab(item.id as TabType)}
-              className={`relative flex flex-col items-center justify-center flex-1 py-2.5 px-3 rounded-2xl md:flex-row md:justify-start md:w-full md:gap-3.5 md:py-3 md:px-4 transition-all duration-200 z-10 ${
+              className={`relative flex flex-col items-center justify-center flex-1 py-2.5 px-3 rounded-2xl md:flex-row md:justify-start md:w-full md:gap-3.5 md:py-3 md:px-4 transition-all duration-200 z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-955 ${
                 isActive 
                   ? 'text-emerald-600 dark:text-emerald-400 font-bold scale-105 md:scale-100' 
                   : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
@@ -52,7 +63,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab })
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
-              <Icon className={`h-5.5 w-5.5 transition-transform duration-200 ${isActive ? 'scale-110 md:scale-100 stroke-[2.25px]' : 'stroke-[1.75px]'}`} />
+              <Icon className={`h-5.5 w-5.5 transition-transform duration-200 ${isActive ? 'scale-110 md:scale-100 stroke-[2.25px]' : 'stroke-[1.75px]'}`} aria-hidden="true" />
               <span className="text-[10px] mt-1 md:text-sm font-semibold tracking-wide md:mt-0">{item.label}</span>
             </button>
           );

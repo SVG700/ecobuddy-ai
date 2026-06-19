@@ -61,7 +61,14 @@ export const AICoachView: React.FC<AICoachViewProps> = ({
     const cachedChat = localStorage.getItem('eb_coach_chat');
     if (cachedChat) {
       try {
-        setMessages(JSON.parse(cachedChat).map((m: any) => ({
+        interface SerializedMessage {
+          id: string;
+          sender: 'user' | 'coach';
+          text: string;
+          timestamp: string | Date;
+        }
+        const parsed = JSON.parse(cachedChat) as SerializedMessage[];
+        setMessages(parsed.map((m) => ({
           ...m,
           timestamp: new Date(m.timestamp)
         })));
@@ -372,6 +379,8 @@ Ask me any questions about your carbon footprint, green routes, or energy-saving
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
+              role="status"
+              aria-live="polite"
               className="mt-5 space-y-2 overflow-hidden"
             >
               <div className="flex justify-between text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
@@ -675,7 +684,12 @@ Ask me any questions about your carbon footprint, green routes, or energy-saving
               className="flex flex-col border-t border-zinc-150 dark:border-zinc-800/80 overflow-hidden"
             >
               {/* Scrollable messages container */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-zinc-50/20">
+              <div 
+                role="log"
+                aria-live="polite"
+                aria-relevant="additions"
+                className="flex-1 overflow-y-auto p-5 space-y-4 bg-zinc-50/20"
+              >
                 {messages.map((msg) => {
                   const isCoach = msg.sender === 'coach';
                   return (
@@ -735,7 +749,8 @@ Ask me any questions about your carbon footprint, green routes, or energy-saving
                   onChange={(e) => setInputText(e.target.value)}
                   disabled={chatLoading}
                   placeholder="Ask Advisor: e.g. How do phantom electricity loads occur?"
-                  className="flex-1 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-xs text-zinc-800 placeholder-zinc-400 focus:border-emerald-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 transition"
+                  aria-label="Ask sustainability coach a question"
+                  className="flex-1 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-xs text-zinc-800 placeholder-zinc-400 focus:border-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-100 transition"
                 />
                 <button
                   onClick={() => handleSendMessage(inputText)}

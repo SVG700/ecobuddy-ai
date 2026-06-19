@@ -12,7 +12,7 @@ import {
   Tooltip, PieChart, Pie, Cell, BarChart, Bar,
   LineChart, Line, CartesianGrid
 } from 'recharts';
-import { UserProfile, Trip, FuelRecord, ElectricityRecord, CarbonScore, UserChallenge } from '../lib/types';
+import { UserProfile, Trip, FuelRecord, ElectricityRecord, CarbonScore, UserChallenge, Achievement } from '../lib/types';
 import { calculateWhatIfSavings } from '../lib/calculations';
 import { TabType } from './BottomNav';
 import { AnimatedCounter } from './AnimatedCounter';
@@ -40,7 +40,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   refreshData
 }) => {
   const [mounted, setMounted] = useState(false);
-  const [achievementToast, setAchievementToast] = useState<any>(null);
+  const [achievementToast, setAchievementToast] = useState<Achievement | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -48,7 +48,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
     // Achievement unlock listener
     const handleUnlock = (e: Event) => {
-      const achievement = (e as CustomEvent).detail;
+      const achievement = (e as CustomEvent<Achievement>).detail;
       setAchievementToast(achievement);
       setTimeout(() => {
         setAchievementToast(null);
