@@ -747,6 +747,12 @@ Ask me any questions about your carbon footprint, green routes, or energy-saving
                   type="text"
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSendMessage(inputText);
+                    }
+                  }}
                   disabled={chatLoading}
                   placeholder="Ask Advisor: e.g. How do phantom electricity loads occur?"
                   aria-label="Ask sustainability coach a question"

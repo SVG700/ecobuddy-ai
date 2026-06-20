@@ -334,9 +334,8 @@ const setLocal = <T>(key: string, value: T): void => {
   }
 };
 
-const initLocalStorage = () => {
-  if (typeof window === 'undefined') return;
-  if (!localStorage.getItem('eb_profile')) {
+export const db = {
+  initializeDemoSession(): UserProfile {
     const mock = getInitialMockData();
     setLocal('eb_profile', mock.profile);
     setLocal('eb_trips', mock.trips);
@@ -346,16 +345,22 @@ const initLocalStorage = () => {
     setLocal('eb_user_achievements', mock.userAchievements);
     setLocal('eb_carbon_scores', mock.carbonScores);
     setLocal('eb_weekly_reports', mock.weeklyReports);
-  }
-};
+    return mock.profile;
+  },
 
-// Initialize if running in browser
-initLocalStorage();
+  clearLocalSession(): void {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem('eb_profile');
+    localStorage.removeItem('eb_trips');
+    localStorage.removeItem('eb_fuel');
+    localStorage.removeItem('eb_electricity');
+    localStorage.removeItem('eb_user_challenges');
+    localStorage.removeItem('eb_user_achievements');
+    localStorage.removeItem('eb_carbon_scores');
+    localStorage.removeItem('eb_weekly_reports');
+    localStorage.removeItem('eb_sandbox_mode');
+  },
 
-/**
- * DATABASE ABSTRACTION API
- */
-export const db = {
   // --- USER AUTHENTICATION & PROFILES ---
   async getProfile(): Promise<UserProfile> {
     if (isSupabaseConfigured && supabase) {

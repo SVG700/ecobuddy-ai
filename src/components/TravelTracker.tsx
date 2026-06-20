@@ -35,13 +35,6 @@ export const TravelTracker: React.FC<TravelTrackerProps> = ({ trips, refreshData
   // Timer interval ref
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-      stopTrackingResources();
-    };
-  }, []);
-
   const stopTrackingResources = () => {
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
@@ -56,6 +49,54 @@ export const TravelTracker: React.FC<TravelTrackerProps> = ({ trips, refreshData
       timerRef.current = null;
     }
   };
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      stopTrackingResources();
+    };
+  }, []);
+
+  // Restore active trip on mount or database sync
+  useEffect(() => {
+    const active = trips.find(t => t.active);
+    if (active) {
+      if (!activeTrip || activeTrip.id !== active.id) {
+        setActiveTrip(active);
+        
+        // Calculate elapsed duration from start time
+        const start = new Date(active.start_time).getTime();
+        const elapsedSecs = Math.max(0, Math.floor((Date.now() - start) / 1000));
+        setLiveDuration(elapsedSecs);
+        
+        // Restore distance
+        setLiveDistance(Number(active.distance_km || 0));
+        
+        // Restart duration timer
+        if (!timerRef.current) {
+          timerRef.current = setInterval(() => {
+            setLiveDuration(prev => prev + 1);
+          }, 1000);
+        }
+        
+        // Restart simulated tracker if active
+        if (isSimulated && !simulationRef.current) {
+          let speed = 0.011;
+          if (active.transport_mode === 'walking') speed = 0.0013;
+          else if (active.transport_mode === 'bicycle') speed = 0.0035;
+
+          simulationRef.current = setInterval(() => {
+            setLiveDistance(prev => Number((prev + speed * (0.8 + Math.random() * 0.4)).toFixed(3)));
+          }, 1000);
+        }
+      }
+    } else {
+      if (activeTrip) {
+        setActiveTrip(null);
+        stopTrackingResources();
+      }
+    }
+  }, [trips, isSimulated, activeTrip]);
 
   const startTrip = async () => {
     try {

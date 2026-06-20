@@ -97,7 +97,46 @@ describe('AuthScreen Component Tests', () => {
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
-      expect(mockOnAuthComplete).toHaveBeenCalledWith(mockUser);
+      expect(mockOnAuthComplete).toHaveBeenCalledWith(expect.objectContaining(mockUser));
     });
+  });
+
+  it('performs successful credentials signUp', async () => {
+    render(<AuthScreen onAuthComplete={mockOnAuthComplete} />);
+    const signUpBtn = screen.getByRole('button', { name: /Sign Up/i });
+    fireEvent.click(signUpBtn);
+
+    const nameInput = screen.getByPlaceholderText('Enter your name');
+    const emailInput = screen.getByPlaceholderText('name@example.com');
+    const passwordInput = screen.getByPlaceholderText('••••••••');
+    const submitBtn = screen.getByRole('button', { name: /Create Account/i });
+
+    fireEvent.change(nameInput, { target: { value: 'New User' } });
+    fireEvent.change(emailInput, { target: { value: 'newuser@example.com' } });
+    fireEvent.change(passwordInput, { target: { value: 'password123' } });
+
+    const mockUser = { id: 'new-user-id', email: 'newuser@example.com' };
+    vi.mocked(supabase!.auth.signUp).mockResolvedValueOnce({
+      data: { user: mockUser as any, session: {} as any },
+      error: null,
+    });
+
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(supabase!.auth.signUp).toHaveBeenCalled();
+      expect(screen.getByText(/Account created successfully/i)).toBeInTheDocument();
+    });
+  });
+
+  it('launches local sandbox demo mode correctly', async () => {
+    render(<AuthScreen onAuthComplete={mockOnAuthComplete} />);
+    const demoBtn = screen.getByRole('button', { name: /Launch Local Sandbox \(Demo Mode\)/i });
+    
+    fireEvent.click(demoBtn);
+
+    expect(localStorage.getItem('eb_sandbox_mode')).toBe('true');
+    expect(localStorage.getItem('eb_profile')).not.toBeNull();
+    expect(mockOnAuthComplete).toHaveBeenCalled();
   });
 });

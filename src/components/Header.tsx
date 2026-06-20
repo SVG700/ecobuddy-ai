@@ -4,26 +4,30 @@ import React from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { UserProfile } from '../lib/types';
 import { LogOut, Flame, Award, Sun, Moon } from 'lucide-react';
+import { TabType } from './BottomNav';
+
+import { db } from '../lib/db';
 
 interface HeaderProps {
   profile: UserProfile | null;
   onLogout: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
+  onNavigate?: (tab: TabType) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ profile, onLogout, isDarkMode, onToggleTheme }) => {
+export const Header: React.FC<HeaderProps> = ({ profile, onLogout, isDarkMode, onToggleTheme, onNavigate }) => {
   const handleLogout = async () => {
     if (isSupabaseConfigured && supabase) {
       await supabase.auth.signOut();
     }
-    // Clean up local profile session
-    localStorage.removeItem('eb_profile');
+    // Clean up local profile and sandbox sessions
+    db.clearLocalSession();
     onLogout();
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-zinc-200/50 bg-white/70 py-4.5 px-4 backdrop-blur-md dark:border-zinc-800/50 dark:bg-zinc-950/70 transition-colors duration-200">
+    <header className="sticky top-0 z-40 border-b border-zinc-200/50 bg-white/70 py-4.5 px-4 backdrop-blur-md dark:border-zinc-800/50 dark:bg-zinc-955/70 transition-colors duration-200">
       <div className="mx-auto flex max-w-5xl items-center justify-between">
         
         {/* Brand Logo */}
@@ -43,7 +47,7 @@ export const Header: React.FC<HeaderProps> = ({ profile, onLogout, isDarkMode, o
           
           {/* Streak Counter */}
           <div 
-            className="flex items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1.5 text-orange-600 dark:text-orange-400 border border-orange-500/10"
+            className="flex items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1.5 text-orange-655 dark:text-orange-400 border border-orange-500/10"
             aria-label={`Current streak: ${profile?.current_streak || 0} days`}
             title={`Current streak: ${profile?.current_streak || 0} days`}
           >
@@ -60,6 +64,26 @@ export const Header: React.FC<HeaderProps> = ({ profile, onLogout, isDarkMode, o
             <Award className="h-4.5 w-4.5" aria-hidden="true" />
             <span className="text-sm font-bold">{profile?.points || 0} pts</span>
           </div>
+
+          {/* User Profile Button */}
+          {profile && onNavigate && (
+            <button
+              onClick={() => onNavigate('profile')}
+              title="View Profile & Goals"
+              aria-label="View Profile & Goals"
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-500 text-zinc-950 font-bold text-sm shadow-md transition hover:scale-105 active:scale-95 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none cursor-pointer"
+            >
+              {profile.avatar_url ? (
+                <img 
+                  src={profile.avatar_url} 
+                  alt={profile.full_name} 
+                  className="h-full w-full rounded-xl object-cover" 
+                />
+              ) : (
+                profile.full_name ? profile.full_name.charAt(0).toUpperCase() : 'E'
+              )}
+            </button>
+          )}
 
           {/* Theme Toggle Button */}
           <button

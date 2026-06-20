@@ -99,6 +99,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete }) => {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  const handleLaunchDemo = () => {
+    setError('');
+    setSuccessMsg('');
+    try {
+      const mockProfile = db.initializeDemoSession();
+      localStorage.setItem('eb_sandbox_mode', 'true');
+      onAuthComplete(mockProfile);
+    } catch (e) {
+      console.error(e);
+      setError('Failed to initialize demo sandbox session.');
+    }
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -120,6 +133,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete }) => {
           created_at: new Date().toISOString()
         };
         localStorage.setItem('eb_profile', JSON.stringify(mockProfile));
+        localStorage.setItem('eb_sandbox_mode', 'true');
         onAuthComplete(mockProfile);
         setLoading(false);
         return;
@@ -363,6 +377,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete }) => {
               </button>
             </span>
           )}
+        </div>
+
+        {/* Guest Demo Sandbox Mode Trigger */}
+        <div className="mt-6 pt-5 border-t border-zinc-800/80 text-center">
+          <button
+            type="button"
+            onClick={handleLaunchDemo}
+            className="w-full rounded-xl border border-emerald-500/30 hover:border-emerald-500/50 bg-emerald-500/5 hover:bg-emerald-500/10 py-3.5 font-bold text-emerald-400 text-xs shadow-md transition active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none cursor-pointer"
+          >
+            Launch Local Sandbox (Demo Mode)
+          </button>
         </div>
 
       </div>

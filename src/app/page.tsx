@@ -54,19 +54,27 @@ export default function Home() {
             const prof = await db.getProfile();
             setProfile(prof);
           } else {
+            // Restore local session only if user explicitly launched sandbox/demo mode
             const localProf = localStorage.getItem('eb_profile');
-            if (localProf) {
+            const isSandbox = localStorage.getItem('eb_sandbox_mode') === 'true';
+            if (localProf && isSandbox) {
               setProfile(JSON.parse(localProf));
+            } else {
+              setProfile(null);
             }
           }
         } else {
           const localProf = localStorage.getItem('eb_profile');
-          if (localProf) {
+          const isSandbox = localStorage.getItem('eb_sandbox_mode') === 'true';
+          if (localProf && isSandbox) {
             setProfile(JSON.parse(localProf));
+          } else {
+            setProfile(null);
           }
         }
       } catch (e) {
         console.error('Auth check error:', e);
+        setProfile(null);
       } finally {
         setAuthChecking(false);
       }
@@ -308,6 +316,7 @@ export default function Home() {
           onLogout={handleLogout} 
           isDarkMode={isDarkMode} 
           onToggleTheme={toggleTheme} 
+          onNavigate={setActiveTab}
         />
 
         {/* View Content Port */}

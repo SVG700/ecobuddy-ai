@@ -4,7 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { 
   LayoutDashboard, Navigation, PlusSquare, 
-  Trophy, BrainCircuit 
+  Trophy, BrainCircuit, FileText
 } from 'lucide-react';
 
 export type TabType = 'dashboard' | 'travel' | 'loggers' | 'challenges' | 'coach' | 'profile' | 'weekly-report';
@@ -20,6 +20,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab })
     { id: 'travel', label: 'Transit', icon: Navigation },
     { id: 'loggers', label: 'Logs', icon: PlusSquare },
     { id: 'challenges', label: 'Play', icon: Trophy },
+    { id: 'weekly-report', label: 'Reports', icon: FileText },
     { id: 'coach', label: 'Advisor', icon: BrainCircuit },
   ] as const;
 
