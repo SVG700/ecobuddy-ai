@@ -180,6 +180,15 @@ export function generateHeuristicWeeklyReport(context: CoachContext): string {
  
 // Client helper to call AI
 export async function askEcoCoach(prompt: string, context: CoachContext): Promise<string> {
+  const isSandbox = typeof window !== 'undefined' && localStorage.getItem('eb_sandbox_mode') === 'true';
+  if (isSandbox) {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(generateHeuristicCoachResponse(prompt, context));
+      }, 800); // Small delay to simulate network/AI generation
+    });
+  }
+
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (isSupabaseConfigured && supabase) {
@@ -188,13 +197,13 @@ export async function askEcoCoach(prompt: string, context: CoachContext): Promis
         headers['Authorization'] = `Bearer ${data.session.access_token}`;
       }
     }
- 
+
     const response = await fetch('/api/ai/coach', {
       method: 'POST',
       headers,
       body: JSON.stringify({ prompt, context }),
     });
- 
+
     if (response.ok) {
       const data = await response.json();
       return data.text;
@@ -210,9 +219,18 @@ export async function askEcoCoach(prompt: string, context: CoachContext): Promis
     }, 800); // Small delay to simulate network/AI generation
   });
 }
- 
+
 // Client helper to generate report
 export async function generateWeeklyReportAI(context: CoachContext): Promise<string> {
+  const isSandbox = typeof window !== 'undefined' && localStorage.getItem('eb_sandbox_mode') === 'true';
+  if (isSandbox) {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(generateHeuristicWeeklyReport(context));
+      }, 1200);
+    });
+  }
+
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (isSupabaseConfigured && supabase) {
@@ -221,13 +239,13 @@ export async function generateWeeklyReportAI(context: CoachContext): Promise<str
         headers['Authorization'] = `Bearer ${data.session.access_token}`;
       }
     }
- 
+
     const response = await fetch('/api/ai/report', {
       method: 'POST',
       headers,
       body: JSON.stringify({ context }),
     });
- 
+
     if (response.ok) {
       const data = await response.json();
       return data.text;
@@ -235,7 +253,7 @@ export async function generateWeeklyReportAI(context: CoachContext): Promise<str
   } catch (error) {
     console.warn('Failed to connect to Gemini API route, using client fallback', error);
   }
- 
+
   return new Promise((resolve) => {
     setTimeout(() => {
       resolve(generateHeuristicWeeklyReport(context));

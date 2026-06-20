@@ -9,6 +9,15 @@ import {
   calculateElectricityEmissions, calculateCarbonScore 
 } from './calculations';
 
+const isSandboxMode = () => {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem('eb_sandbox_mode') === 'true';
+};
+
+const shouldUseSupabase = () => {
+  return !!(isSupabaseConfigured && supabase && !isSandboxMode());
+};
+
 // Static challenges (same as SQL schema)
 const DEFAULT_CHALLENGES: Challenge[] = [
   {
@@ -363,7 +372,7 @@ export const db = {
 
   // --- USER AUTHENTICATION & PROFILES ---
   async getProfile(): Promise<UserProfile> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       
@@ -383,7 +392,7 @@ export const db = {
   },
 
   async updateProfile(updates: Partial<UserProfile>): Promise<UserProfile> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -412,7 +421,7 @@ export const db = {
 
   // --- TRIPS (TRAVEL TRACKING) ---
   async getTrips(): Promise<Trip[]> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data, error } = await supabase
         .from('trips')
         .select('*')
@@ -427,7 +436,7 @@ export const db = {
 
   async startTrip(mode: TransportMode): Promise<Trip> {
     const nowStr = new Date().toISOString();
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -469,7 +478,7 @@ export const db = {
   },
 
   async stopTrip(tripId: string, distanceKm: number, durationMin: number): Promise<Trip> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       // Fetch trip to get transport mode
       const { data: currentTrip, error: fetchErr } = await supabase
         .from('trips')
@@ -531,7 +540,7 @@ export const db = {
 
   // --- FUEL RECORDS ---
   async getFuelRecords(): Promise<FuelRecord[]> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data, error } = await supabase
         .from('fuel_records')
         .select('*')
@@ -548,7 +557,7 @@ export const db = {
     const co2 = calculateFuelEmissions(litres, fuelType);
     const nowStr = new Date().toISOString();
 
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -594,7 +603,7 @@ export const db = {
 
   // --- ELECTRICITY CONSUMPTION ---
   async getElectricityRecords(): Promise<ElectricityRecord[]> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data, error } = await supabase
         .from('electricity_records')
         .select('*')
@@ -611,7 +620,7 @@ export const db = {
     const co2 = calculateElectricityEmissions(unitsKwh);
     const nowStr = new Date().toISOString();
 
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -663,7 +672,7 @@ export const db = {
 
   // --- CHALLENGES ---
   async getChallenges(): Promise<Challenge[]> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data, error } = await supabase
         .from('challenges')
         .select('*');
@@ -676,7 +685,7 @@ export const db = {
   },
 
   async getUserChallenges(): Promise<UserChallenge[]> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data, error } = await supabase
         .from('user_challenges')
         .select('*');
@@ -690,7 +699,7 @@ export const db = {
 
   async startChallenge(challengeId: string): Promise<UserChallenge> {
     const nowStr = new Date().toISOString();
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -733,7 +742,7 @@ export const db = {
 
   async completeChallenge(challengeId: string): Promise<UserChallenge> {
     const nowStr = new Date().toISOString();
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       // Find the active challenge row
       const { data: activeUC, error: fetchErr } = await supabase
         .from('user_challenges')
@@ -803,7 +812,7 @@ export const db = {
 
   // --- ACHIEVEMENTS ---
   async getAchievements(): Promise<Achievement[]> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data, error } = await supabase
         .from('achievements')
         .select('*');
@@ -816,7 +825,7 @@ export const db = {
   },
 
   async getUserAchievements(): Promise<UserAchievement[]> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data, error } = await supabase
         .from('user_achievements')
         .select('*');
@@ -830,7 +839,7 @@ export const db = {
 
   // --- WEEKLY REPORTS ---
   async getWeeklyReports(): Promise<WeeklyReport[]> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data, error } = await supabase
         .from('weekly_reports')
         .select('*')
@@ -848,7 +857,7 @@ export const db = {
     const weekStartStr = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const nowStr = now.toISOString();
 
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -899,7 +908,7 @@ export const db = {
 
   // --- ANALYTICS / DAILY CARBON SCORES ---
   async getCarbonScores(): Promise<CarbonScore[]> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data, error } = await supabase
         .from('carbon_scores')
         .select('*')
@@ -943,7 +952,7 @@ export const db = {
       pointsEarned += Math.round(distanceKm * 1);
     }
 
-    if (isSupabaseConfigured && supabase) {
+    if (shouldUseSupabase() && supabase) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 

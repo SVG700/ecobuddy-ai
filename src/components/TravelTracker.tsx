@@ -17,16 +17,31 @@ interface TravelTrackerProps {
 }
 
 export const TravelTracker: React.FC<TravelTrackerProps> = ({ trips, refreshData }) => {
-  const [activeTrip, setActiveTrip] = useState<Trip | null>(null);
+  const [activeTrip, setActiveTrip] = useState<Trip | null>(() => trips.find(t => t.active) || null);
   const [selectedMode, setSelectedMode] = useState<TransportMode>('car');
+  const [error, setError] = useState<string | null>(null);
   
   // Live stats
-  const [liveDistance, setLiveDistance] = useState(0);
-  const [liveDuration, setLiveDuration] = useState(0); // in seconds
+  const [liveDistance, setLiveDistance] = useState(() => {
+    if (typeof window === 'undefined') return 0;
+    const savedDist = localStorage.getItem('eb_active_trip_distance');
+    if (savedDist) return Number(savedDist);
+    const active = trips.find(t => t.active);
+    return active ? Number(active.distance_km || 0) : 0;
+  });
+  const [liveDuration, setLiveDuration] = useState(() => {
+    const active = trips.find(t => t.active);
+    if (active) {
+      const start = new Date(active.start_time).getTime();
+      return Math.max(0, Math.floor((Date.now() - start) / 1000));
+    }
+    return 0;
+  }); // in seconds
   
   // Geolocation tracking refs
   const watchIdRef = useRef<number | null>(null);
   const lastCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  const stoppedTripIdsRef = useRef<Set<string>>(new Set());
   
   // Simulation interval ref
   const simulationRef = useRef<NodeJS.Timeout | null>(null);
@@ -34,6 +49,13 @@ export const TravelTracker: React.FC<TravelTrackerProps> = ({ trips, refreshData
   
   // Timer interval ref
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Save live distance to localStorage to survive page refreshes
+  useEffect(() => {
+    if (activeTrip) {
+      localStorage.setItem('eb_active_trip_distance', liveDistance.toString());
+    }
+  }, [liveDistance, activeTrip]);
 
   const stopTrackingResources = () => {
     if (watchIdRef.current !== null) {
@@ -59,123 +81,165 @@ export const TravelTracker: React.FC<TravelTrackerProps> = ({ trips, refreshData
 
   // Restore active trip on mount or database sync
   useEffect(() => {
+    console.log('[DEBUG] useEffect activeTrip:', activeTrip?.id, 'trips.length:', trips.length, 'trips active:', trips.map(t => t.active));
+    if (activeTrip && activeTrip.id.startsWith('temp-')) {
+      console.log('[DEBUG] useEffect early return on temp id');
+      return;
+    }
     const active = trips.find(t => t.active);
-    if (active) {
+    if (active && !stoppedTripIdsRef.current.has(active.id)) {
       if (!activeTrip || activeTrip.id !== active.id) {
+        console.log('[DEBUG] useEffect setting activeTrip to:', active.id);
         setActiveTrip(active);
-        
-        // Calculate elapsed duration from start time
+        stopTrackingResources();
         const start = new Date(active.start_time).getTime();
         const elapsedSecs = Math.max(0, Math.floor((Date.now() - start) / 1000));
         setLiveDuration(elapsedSecs);
-        
-        // Restore distance
         setLiveDistance(Number(active.distance_km || 0));
-        
-        // Restart duration timer
-        if (!timerRef.current) {
-          timerRef.current = setInterval(() => {
-            setLiveDuration(prev => prev + 1);
-          }, 1000);
-        }
-        
-        // Restart simulated tracker if active
-        if (isSimulated && !simulationRef.current) {
-          let speed = 0.011;
-          if (active.transport_mode === 'walking') speed = 0.0013;
-          else if (active.transport_mode === 'bicycle') speed = 0.0035;
+      }
+      
+      if (!timerRef.current) {
+        timerRef.current = setInterval(() => {
+          setLiveDuration(prev => prev + 1);
+        }, 1000);
+      }
+      
+      if (isSimulated && !simulationRef.current) {
+        let speed = 0.011;
+        if (active.transport_mode === 'walking') speed = 0.0013;
+        else if (active.transport_mode === 'bicycle') speed = 0.0035;
 
-          simulationRef.current = setInterval(() => {
-            setLiveDistance(prev => Number((prev + speed * (0.8 + Math.random() * 0.4)).toFixed(3)));
-          }, 1000);
-        }
+        simulationRef.current = setInterval(() => {
+          setLiveDistance(prev => Number((prev + speed * (0.8 + Math.random() * 0.4)).toFixed(3)));
+        }, 1000);
       }
     } else {
       if (activeTrip) {
-        setActiveTrip(null);
-        stopTrackingResources();
+        const matchingTripInProps = trips.find(t => t.id === activeTrip.id);
+        const shouldClear = matchingTripInProps 
+          ? !matchingTripInProps.active 
+          : (trips.length > 0 && !activeTrip.id.startsWith('temp-'));
+
+        if (shouldClear) {
+          setActiveTrip(null);
+          stopTrackingResources();
+        }
       }
     }
   }, [trips, isSimulated, activeTrip]);
 
   const startTrip = async () => {
-    try {
-      const trip = await db.startTrip(selectedMode);
-      setActiveTrip(trip);
-      setLiveDistance(0);
-      setLiveDuration(0);
-      lastCoordsRef.current = null;
+    setError(null);
+    const start_time = new Date().toISOString();
+    const tempTripId = `temp-${Date.now()}`;
+    const tempTrip: Trip = {
+      id: tempTripId,
+      user_id: 'optimistic-user',
+      transport_mode: selectedMode,
+      distance_km: 0,
+      duration_min: 0,
+      co2_emissions_kg: 0,
+      start_time,
+      active: true
+    };
 
-      // Start elapsed timer
-      timerRef.current = setInterval(() => {
-        setLiveDuration(prev => prev + 1);
+    // Transition UI immediately
+    console.log('[DEBUG] startTrip setting optimistic activeTrip:', tempTrip.id);
+    setActiveTrip(tempTrip);
+    setLiveDistance(0);
+    setLiveDuration(0);
+    lastCoordsRef.current = null;
+
+    // Start elapsed timer
+    timerRef.current = setInterval(() => {
+      setLiveDuration(prev => prev + 1);
+    }, 1000);
+
+    if (isSimulated) {
+      let speed = 0.011;
+      if (selectedMode === 'walking') speed = 0.0013;
+      else if (selectedMode === 'bicycle') speed = 0.0035;
+
+      simulationRef.current = setInterval(() => {
+        setLiveDistance(prev => Number((prev + speed * (0.8 + Math.random() * 0.4)).toFixed(3)));
       }, 1000);
-
-      if (isSimulated) {
-        // Start simulation: add distance every second based on mode
-        let speed = 0.011;
-        if (selectedMode === 'walking') speed = 0.0013;
-        else if (selectedMode === 'bicycle') speed = 0.0035;
-
-        simulationRef.current = setInterval(() => {
-          setLiveDistance(prev => Number((prev + speed * (0.8 + Math.random() * 0.4)).toFixed(3)));
-        }, 1000);
-      } else {
-        // Real GPS tracking
-        if (!navigator.geolocation) {
-          alert('Geolocation is not supported by your browser. Defaulting to simulation mode.');
-          setIsSimulated(true);
-          // Restart trip with simulation
-          stopTrip();
-          return;
-        }
-
-        const options = {
-          enableHighAccuracy: true,
-          timeout: 5000,
-          maximumAge: 0
-        };
-
-        watchIdRef.current = navigator.geolocation.watchPosition(
-          (position) => {
-            const { latitude, longitude } = position.coords;
-            if (lastCoordsRef.current) {
-              const dist = getHaversineDistance(
-                lastCoordsRef.current.lat,
-                lastCoordsRef.current.lng,
-                latitude,
-                longitude
-              );
-              setLiveDistance(prev => Number((prev + dist).toFixed(3)));
-            }
-            lastCoordsRef.current = { lat: latitude, lng: longitude };
-          },
-          (error) => {
-            console.error('GPS tracking error:', error);
-            alert('Could not acquire high accuracy GPS signal. Try using simulation mode.');
-          },
-          options
-        );
+    } else {
+      if (!navigator.geolocation) {
+        setError('Geolocation is not supported by your browser. Defaulting to simulation mode.');
+        setIsSimulated(true);
+        setActiveTrip(null);
+        stopTrackingResources();
+        return;
       }
-    } catch (error) {
-      console.error('Failed to start trip:', error);
+
+      const options = {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
+      };
+
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          if (lastCoordsRef.current) {
+            const dist = getHaversineDistance(
+              lastCoordsRef.current.lat,
+              lastCoordsRef.current.lng,
+              latitude,
+              longitude
+            );
+            setLiveDistance(prev => Number((prev + dist).toFixed(3)));
+          }
+          lastCoordsRef.current = { lat: latitude, lng: longitude };
+        },
+        (err) => {
+          console.error('GPS tracking error:', err);
+          setError('Could not acquire GPS signal. Try using simulation mode.');
+        },
+        options
+      );
+    }
+
+    try {
+      const realTrip = await db.startTrip(selectedMode);
+      console.log('[DEBUG] startTrip database resolved, setting activeTrip to:', realTrip.id);
+      setActiveTrip(prev => {
+        if (prev && prev.id === tempTripId) {
+          return { ...realTrip };
+        }
+        return prev;
+      });
+      refreshData();
+    } catch (err: any) {
+      console.error('Failed to start trip:', err);
+      console.log('[DEBUG] startTrip database failed, rolling back activeTrip to null');
+      setActiveTrip(null);
+      stopTrackingResources();
+      setError(err?.message || 'Failed to start commute on database. Please check your connection and try again.');
     }
   };
 
   const stopTrip = async () => {
     if (!activeTrip) return;
     
+    const tripId = activeTrip.id;
+    stoppedTripIdsRef.current.add(tripId);
     stopTrackingResources();
     const durationMin = Math.max(1, Math.round(liveDuration / 60));
     
+    setActiveTrip(null);
+    localStorage.removeItem('eb_active_trip_distance');
+    
     try {
-      await db.stopTrip(activeTrip.id, liveDistance, durationMin);
-      setActiveTrip(null);
+      await db.stopTrip(tripId, liveDistance, durationMin);
       setLiveDistance(0);
       setLiveDuration(0);
       refreshData();
-    } catch (error) {
-      console.error('Failed to stop trip:', error);
+    } catch (err: any) {
+      console.error('Failed to stop trip:', err);
+      setError(err?.message || 'Failed to stop and log commute on database.');
+      setLiveDistance(0);
+      setLiveDuration(0);
     }
   };
 
@@ -213,6 +277,21 @@ export const TravelTracker: React.FC<TravelTrackerProps> = ({ trips, refreshData
 
   return (
     <div className="space-y-6 pb-20 md:pb-6">
+      {error && (
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span>⚠️</span>
+            <span>{error}</span>
+          </div>
+          <button 
+            type="button"
+            onClick={() => setError(null)} 
+            className="text-[10px] font-bold uppercase text-rose-500 hover:text-rose-600 tracking-wider focus:outline-none cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       
       {/* Active Trip HUD / Start Section */}
       <div className="p-6 rounded-3xl border border-zinc-150 bg-white dark:border-zinc-800/80 dark:bg-zinc-950/40 shadow-sm overflow-hidden">
@@ -289,10 +368,11 @@ export const TravelTracker: React.FC<TravelTrackerProps> = ({ trips, refreshData
               {/* Stop Button */}
               <button
                 onClick={stopTrip}
-                className="w-full py-4 bg-rose-500 hover:bg-rose-600 font-extrabold text-zinc-950 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-rose-500/10 transition active:scale-98 focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:outline-none cursor-pointer"
+                disabled={activeTrip.id.startsWith('temp-')}
+                className="w-full py-4 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 font-extrabold text-zinc-950 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-rose-500/10 transition active:scale-98 focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:outline-none cursor-pointer"
               >
                 <Square className="h-5 w-5 fill-current" />
-                Stop and Log Trip
+                {activeTrip.id.startsWith('temp-') ? 'Connecting to Database...' : 'Stop and Log Trip'}
               </button>
             </motion.div>
           ) : (
