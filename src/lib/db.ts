@@ -861,9 +861,19 @@ export const db = {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      console.log('[db.addWeeklyReport] Attempting Supabase upsert with payload:', {
+        user_id: user.id,
+        week_start_date: weekStartStr,
+        total_emissions_kg: totalCO2,
+        trend_percentage: -8.0,
+        best_activities: ['Logged active trips', 'Participated in eco challenges'],
+        areas_for_improvement: ['Home heating/cooling loads'],
+        ai_action_plan_length: reportText.length
+      });
+
       const { data, error } = await supabase
         .from('weekly_reports')
-        .insert({
+        .upsert({
           user_id: user.id,
           week_start_date: weekStartStr,
           total_emissions_kg: totalCO2,
@@ -871,18 +881,26 @@ export const db = {
           best_activities: ['Logged active trips', 'Participated in eco challenges'],
           areas_for_improvement: ['Home heating/cooling loads'],
           ai_action_plan: reportText
+        }, {
+          onConflict: 'user_id,week_start_date'
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[db.addWeeklyReport] Supabase upsert error:', error);
+        throw error;
+      }
+
+      console.log('[db.addWeeklyReport] Supabase upsert result:', data);
       return data;
     } else {
       const profile = getLocal<UserProfile | null>('eb_profile', null);
       const reports = getLocal<WeeklyReport[]>('eb_weekly_reports', []);
 
+      const existingIndex = reports.findIndex(r => r.week_start_date === weekStartStr);
       const newReport: WeeklyReport = {
-        id: `report-${Date.now()}`,
+        id: existingIndex >= 0 ? reports[existingIndex].id : `report-${Date.now()}`,
         user_id: profile?.id || 'mock-user',
         week_start_date: weekStartStr,
         total_emissions_kg: totalCO2,
@@ -890,18 +908,23 @@ export const db = {
         best_activities: ['Replaced 3 car trips with walking/cycling', 'Logged energy consumption data'],
         areas_for_improvement: ['Car carbon intensity remains high', 'Standby loads at night'],
         ai_action_plan: reportText,
-        created_at: nowStr
+        created_at: existingIndex >= 0 ? reports[existingIndex].created_at : nowStr
       };
 
-      reports.unshift(newReport);
+      if (existingIndex >= 0) {
+        reports[existingIndex] = newReport;
+      } else {
+        reports.unshift(newReport);
+      }
       setLocal('eb_weekly_reports', reports);
 
       // Reward points for reading weekly report
-      if (profile) {
+      if (profile && existingIndex < 0) {
         const updatedProfile = { ...profile, points: profile.points + 25 };
         setLocal('eb_profile', updatedProfile);
       }
 
+      console.log('[db.addWeeklyReport] Mock mode upsert result:', newReport);
       return newReport;
     }
   },

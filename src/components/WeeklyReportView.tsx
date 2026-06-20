@@ -74,6 +74,20 @@ export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
   const totalCO2ThisWeek = totalTripsCO2 + totalFuelCO2 + totalElectricityCO2;
 
   const handleGenerateReport = async () => {
+    // 2. Detect whether a report already exists for the current user and week_start_date
+    const now = new Date();
+    const weekStartStr = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    
+    console.log('[WeeklyReportView] Checking if report already exists for week:', weekStartStr);
+    const existingReport = reports.find(r => r.week_start_date === weekStartStr);
+    
+    if (existingReport) {
+      console.log('[WeeklyReportView] Report already exists. Loading existing report:', existingReport);
+      setSelectedReport(existingReport);
+      // 3. Do NOT call Gemini again. Do NOT attempt another INSERT.
+      return;
+    }
+
     setGenerating(true);
     try {
       // Build context payload
@@ -91,15 +105,23 @@ export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
       };
 
       // Call Gemini report generator
+      console.log('[WeeklyReportView] Requesting weekly report from Gemini...');
       const reportText = await generateWeeklyReportAI(context);
+      console.log('[WeeklyReportView] Gemini API response text preview:', reportText.slice(0, 150) + '...');
       
       // Save report to database/localStorage
+      console.log('[WeeklyReportView] Saving weekly report to database...');
       const newReport = await db.addWeeklyReport(reportText, totalCO2ThisWeek);
+      console.log('[WeeklyReportView] Supabase insert result:', newReport);
+
       setSelectedReport(newReport);
       refreshData();
-    } catch (e) {
-      console.error('Failed to generate weekly report:', e);
-      alert('Could not compile weekly report. Please check your internet connection and try again.');
+    } catch (err: unknown) {
+      const e = err as any;
+      console.error('[WeeklyReportView] Failed to generate weekly report:', e);
+      // 5. Replace generic error text with actual database/api error messages.
+      const errorMsg = e?.message || e?.details || (typeof e === 'string' ? e : JSON.stringify(e)) || 'Unknown error';
+      alert(`Could not compile weekly report: ${errorMsg}`);
     } finally {
       setGenerating(false);
     }
