@@ -264,7 +264,7 @@ export const TravelTracker: React.FC<TravelTrackerProps> = ({ trips, refreshData
     localStorage.removeItem('eb_active_trip_distance');
     
     try {
-      await db.stopTrip(tripId, liveDistance, durationMin);
+      await db.stopTrip(tripId, liveDistance, durationMin, liveDuration);
       setLiveDistance(0);
       setLiveDuration(0);
       refreshData();

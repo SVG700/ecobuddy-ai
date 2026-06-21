@@ -259,6 +259,52 @@ describe('TravelTracker UI and Commute Flow integration tests', () => {
     expect(localStorage.getItem('eb_active_trip_distance')).toBeNull();
   });
 
+  it('displays user-friendly error message if the trip is too short (db.stopTrip throws validation error)', async () => {
+    const activeTrip = {
+      id: 'trip-active-101',
+      user_id: 'user-123',
+      transport_mode: 'bicycle',
+      distance_km: 0,
+      duration_min: 0,
+      co2_emissions_kg: 0,
+      start_time: new Date().toISOString(),
+      active: true
+    };
+
+    const friendlyError = new Error('Trip was too short to qualify for eco rewards. Trips must be at least 60 seconds or 0.1 km.');
+    vi.mocked(db.stopTrip).mockRejectedValue(friendlyError);
+    const refreshDataMock = vi.fn();
+
+    // Restore distance to mock travel state
+    localStorage.setItem('eb_active_trip_distance', '0.05');
+
+    const { rerender } = render(<TravelTracker trips={[activeTrip] as any} refreshData={refreshDataMock} />);
+
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync();
+    });
+
+    const stopButton = screen.getByText('Stop and Log Trip');
+    await act(async () => {
+      fireEvent.click(stopButton);
+    });
+
+    // Rerender component with no active trips
+    rerender(<TravelTracker trips={[]} refreshData={refreshDataMock} />);
+
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync();
+    });
+
+    // Verify stopTrip called
+    expect(db.stopTrip).toHaveBeenCalled();
+
+    // Verify inline error banner message is displayed
+    expect(screen.getByText(/Trip was too short to qualify for eco rewards/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Tracking active bicycle/i)).toBeNull();
+    expect(localStorage.getItem('eb_active_trip_distance')).toBeNull();
+  });
+
   describe('Graceful GPS permission failure handling', () => {
     const mockWatchPosition = vi.fn();
     const mockClearWatch = vi.fn();

@@ -477,8 +477,23 @@ export const db = {
     }
   },
 
-  async stopTrip(tripId: string, distanceKm: number, durationMin: number): Promise<Trip> {
+  async stopTrip(tripId: string, distanceKm: number, durationMin: number, durationSec?: number): Promise<Trip> {
+    const durationSeconds = durationSec !== undefined ? durationSec : durationMin * 60;
+    const isValid = durationSeconds >= 60 || distanceKm >= 0.1;
+
     if (shouldUseSupabase() && supabase) {
+      if (!isValid) {
+        // Delete the invalid trip so it is not saved at all
+        const { error: deleteErr } = await supabase
+          .from('trips')
+          .delete()
+          .eq('id', tripId);
+        
+        if (deleteErr) throw deleteErr;
+
+        throw new Error('Trip was too short to qualify for eco rewards. Trips must be at least 60 seconds or 0.1 km.');
+      }
+
       // Fetch trip to get transport mode
       const { data: currentTrip, error: fetchErr } = await supabase
         .from('trips')
@@ -511,6 +526,15 @@ export const db = {
 
       return data;
     } else {
+      if (!isValid) {
+        // Delete the invalid trip from localStorage so it is not saved at all
+        const trips = getLocal<Trip[]>('eb_trips', []);
+        const filtered = trips.filter((t: Trip) => t.id !== tripId);
+        setLocal('eb_trips', filtered);
+
+        throw new Error('Trip was too short to qualify for eco rewards. Trips must be at least 60 seconds or 0.1 km.');
+      }
+
       const trips = getLocal<Trip[]>('eb_trips', []);
       const index = trips.findIndex((t: Trip) => t.id === tripId);
       if (index === -1) throw new Error('Trip not found');

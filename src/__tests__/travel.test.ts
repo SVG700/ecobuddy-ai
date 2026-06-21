@@ -45,4 +45,20 @@ describe('Travel Tracking Integration Tests', () => {
     expect(trips).toHaveLength(1);
     expect(trips[0].id).toBe(trip.id);
   });
+
+  it('rejects and deletes invalid short trips and does not award rewards', async () => {
+    // Start trip
+    const trip = await db.startTrip('walking');
+    expect(trip).toBeDefined();
+
+    // Stop trip with invalid stats (e.g. 0.05 km, 30 seconds)
+    await expect(db.stopTrip(trip.id, 0.05, 1, 30)).rejects.toThrow(
+      'Trip was too short to qualify for eco rewards. Trips must be at least 60 seconds or 0.1 km.'
+    );
+
+    // Verify trip is not in the database/localStorage
+    const trips = await db.getTrips();
+    const found = trips.find(t => t.id === trip.id);
+    expect(found).toBeUndefined();
+  });
 });
