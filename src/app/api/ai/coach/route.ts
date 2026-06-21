@@ -126,6 +126,7 @@ export async function POST(request: Request) {
     const currentStreak = typeof context.profile.current_streak === 'number' ? context.profile.current_streak : 0;
     const carbonSaved = typeof context.profile.carbon_saved_kg === 'number' ? context.profile.carbon_saved_kg : 0;
     const goals = Array.isArray(context.profile.goals) ? context.profile.goals : [];
+    const userChallenges = Array.isArray(context.userChallenges) ? context.userChallenges : [];
 
     const ai = new GoogleGenerativeAI(apiKey);
     // Use gemini-1.5-flash which is widely supported and super fast
@@ -144,6 +145,11 @@ Here is the user's current context:
 - Trips Logged: ${JSON.stringify(trips)}
 - Fuel Records: ${JSON.stringify(fuelRecords)}
 - Electricity Records: ${JSON.stringify(electricityRecords)}
+- In-Progress/Completed Challenges: ${JSON.stringify(userChallenges)}
+
+Safety & Data Integrity Rules:
+1. For challenges, always refer to the challenge titles (e.g. 'No-Car Day') provided in the userChallenges context. Never show or mention UUIDs like 'db7e1da0-...' to the user.
+2. If data is unavailable or missing (e.g. no trips, fuel records, or electricity records), explicitly state that it is unavailable. Do not invent values or hallucinate activities.
 
 Respond to the user's message: "${prompt}"
 Keep your response concise (under 250 words) and format it beautifully with clean Markdown (headings, lists, bold text).`;

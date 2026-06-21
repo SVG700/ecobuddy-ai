@@ -6,7 +6,7 @@ import {
   Sparkles, Calendar, History, 
   Printer, Clipboard, FileText, ChevronRight, Leaf 
 } from 'lucide-react';
-import { WeeklyReport, Trip, FuelRecord, ElectricityRecord, UserProfile, UserChallenge } from '../lib/types';
+import { WeeklyReport, Trip, FuelRecord, ElectricityRecord, UserProfile, UserChallenge, Challenge } from '../lib/types';
 import { db } from '../lib/db';
 import { generateWeeklyReportAI } from '../lib/gemini';
 
@@ -16,6 +16,7 @@ interface WeeklyReportViewProps {
   fuelRecords: FuelRecord[];
   electricityRecords: ElectricityRecord[];
   profile: UserProfile | null;
+  challenges?: Challenge[];
   userChallenges?: UserChallenge[];
   refreshData: () => void;
 }
@@ -56,12 +57,27 @@ const SkeletonLoader = () => (
   </div>
 );
 
+const formatReportLabel = (startDateStr: string) => {
+  const startDate = new Date(startDateStr);
+  const endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const optStart: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  const optEnd: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+  
+  if (startDate.getFullYear() !== endDate.getFullYear()) {
+    const optStartWithYear: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+    return `${startDate.toLocaleDateString(undefined, optStartWithYear)} - ${endDate.toLocaleDateString(undefined, optEnd)}`;
+  }
+  
+  return `${startDate.toLocaleDateString(undefined, optStart)} - ${endDate.toLocaleDateString(undefined, optEnd)}`;
+};
+
 export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
   reports,
   trips,
   fuelRecords,
   electricityRecords,
   profile,
+  challenges = [],
   userChallenges = [],
   refreshData
 }) => {
@@ -102,11 +118,26 @@ export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
 
     try {
       // Build context payload
+      const enrichedUserChallenges = (userChallenges || []).map(uc => {
+        const detail = (challenges || []).find(c => c.id === uc.challenge_id);
+        return {
+          id: uc.id,
+          challenge_id: uc.challenge_id,
+          status: uc.status,
+          started_at: uc.started_at,
+          completed_at: uc.completed_at,
+          title: detail ? detail.title : 'Unknown Challenge',
+          description: detail ? detail.description : '',
+          category: detail ? detail.category : '',
+          points_reward: detail ? detail.points_reward : 0
+        };
+      });
+
       const context = {
         trips,
         fuelRecords,
         electricityRecords,
-        userChallenges: userChallenges || [],
+        userChallenges: enrichedUserChallenges as any,
         profile: {
           full_name: profile?.full_name || 'Eco Buddy',
           points: profile?.points || 0,
@@ -297,7 +328,7 @@ export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
                 >
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-zinc-400" />
-                    <span>Report: {dateStr}</span>
+                    <span>Week of {dateStr}</span>
                   </div>
                   <ChevronRight className="h-3.5 w-3.5 opacity-60 text-zinc-450" />
                 </motion.button>
@@ -351,7 +382,7 @@ export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
                   <Calendar className="h-5 w-5 text-emerald-500" />
                   <div>
                     <h3 className="font-extrabold text-sm text-zinc-800 dark:text-zinc-200">
-                      Weekly Analysis: {new Date(selectedReport.week_start_date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                      Weekly Analysis: {formatReportLabel(selectedReport.week_start_date)}
                     </h3>
                     <span className="text-[10px] text-zinc-405">Carbon Intensity: {selectedReport.total_emissions_kg.toFixed(1)} kg CO₂</span>
                   </div>

@@ -136,20 +136,57 @@ Here is the user's data context:
 - Electricity Records: ${JSON.stringify(electricityRecords)}
 - In-Progress/Completed Challenges: ${JSON.stringify(userChallenges)}
 
-Instructions:
-1. You MUST use and reference the actual logged trips, fuel records, electricity records, and challenge status in this report.
-2. You MUST NOT output generic recommendations. All insights and recommendations must reference the actual user data, specific numbers, and names.
-   - For example: if they logged 20L of fuel, suggest reducing that specific 20L fuel usage. If they logged 150kWh electricity, suggest reducing that specific 150kWh grid consumption.
-   - For completed challenges, congratulate them on those specific challenges by name.
-   - For incomplete/active challenges, reference those specific challenge names to encourage completion.
-3. Calculate and display:
-   - A sustainability score (0–100) based on their activities.
-   - A weekly grade (A+, A, B, C).
-4. The entire report must be under 700 words.
+Safety & Reliability Rules:
+1. If any data (trips, fuel logs, electricity logs, challenges) is unavailable or empty, explicitly state that it is unavailable. Do NOT invent values or hallucinate activities.
+2. For challenges, always refer to the challenge titles (e.g. 'No-Car Day') provided in the userChallenges context. Never show or mention UUIDs like 'db7e1da0-...' to the user. Gemini should never receive or mention only challenge UUIDs. Update all report sections to reference challenge names instead of IDs.
 
-Format your response EXACTLY with the following sections in Markdown:
+Report Personalization Requirements:
+- Include exact challenge names.
+- Include exact transport modes used (e.g., walking, bicycle, metro, bus, train, car, bike).
+- Include exact fuel type (e.g., petrol, diesel) and fuel volume (in Litres) if logged.
+- Include exact electricity consumption (in kWh) if logged.
+- Mention top 3 user behaviors from actual logs (e.g., frequency of eco commutes, fuel fill-up trends, streak consistency).
+- Mention challenge progress percentages if applicable.
+- Avoid generic sustainability advice. Every recommendation must reference real user activity.
+
+Weekly Grade Calculation Logic:
+- Score starts at 100.
+- Deductions:
+  - High electricity usage (deduct 1 point for every 5 kWh logged, up to a max of 20 points).
+  - High fuel consumption (deduct 2 points for every Litre logged, up to a max of 30 points).
+  - High transport emissions (deduct 1 point for every 2 kg of CO2 emitted from private transport/car, up to a max of 20 points).
+- Bonuses:
+  - Walking trips (+3 points per trip, up to a max of 15 points).
+  - Cycling trips (+3 points per trip, up to a max of 15 points).
+  - Public transport trips (bus, metro, train) (+2 points per trip, up to a max of 10 points).
+  - Carbon saved (+1 point for every kg of carbon saved, up to a max of 15 points).
+  - Streak maintenance (+1 point per streak day, up to a max of 10 points).
+  - Completed challenges (+5 points per completed challenge, up to a max of 15 points).
+- Clamp final score between 10 and 100.
+- Weekly Grade Bounds:
+  - 95+ = A+
+  - 85-94 = A
+  - 70-84 = B
+  - 50-69 = C
+  - Below 50 = D
+
+Format your response EXACTLY with the following sections in Markdown (maintain total report length under 700 words):
 ## 📊 Weekly Sustainability Report: EcoBuddy AI
 *Prepared for ${fullName} on [Current Date]*
+
+---
+
+### Key Achievements This Week
+[Summarize user's key green accomplishments this week referencing exact challenge titles, active transport logs, and carbon saved. If none, state that they are unavailable.]
+
+### Most Impactful Habit
+[Detail the single most positive recurring habit from their logs (e.g. daily walking, zero fuel consumption, etc.) and calculate its carbon offset impact. If none, state that they are unavailable.]
+
+### Fastest Way To Reduce Emissions Next Week
+[Identify the highest emission source from their logs and recommend one immediate, highly specific reduction tip. If no logs, state that they are unavailable.]
+
+### Estimated Annual Savings If Current Improvements Continue
+[Compute and state estimated annual carbon reduction (kg CO2) and potential points/financial savings if current habits are maintained. If none, state that they are unavailable.]
 
 ---
 
@@ -176,9 +213,9 @@ Under a sub-heading "#### Data-Driven Carbon Insights", output:
 ---
 
 ### 4. Personalized Sustainability Score & Weekly Grade
-*   **Weekly Grade:** **[A+, A, B, or C]**
-*   **Score:** **[Output a score out of 100 based on their weekly metrics. Start at 100, deduct for high emissions, add for carbon saved, streak, and active commutes.]/100**
-*   **Analysis:** [Provide a descriptive grade analysis in 2-3 sentences.]
+*   **Weekly Grade:** **[A+, A, B, C, or D]**
+*   **Score:** **[Output the final numeric score out of 100 based on the Weekly Grade Calculation Logic above]/100**
+*   **Grade Explanation:** [Provide a detailed explanation of the grade and score calculation, listing specific deductions and bonuses applied.]
 
 ---
 

@@ -9,7 +9,7 @@ import {
   AlertTriangle, CheckCircle, BarChart3, Coins, Flame
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { Trip, FuelRecord, ElectricityRecord, UserProfile, CarbonScore } from '../lib/types';
+import { Trip, FuelRecord, ElectricityRecord, UserProfile, CarbonScore, Challenge, UserChallenge } from '../lib/types';
 import { askEcoCoach, CoachContext, generateHeuristicWeeklyReport } from '../lib/gemini';
 import { db } from '../lib/db';
 import { AnimatedCounter } from './AnimatedCounter';
@@ -19,6 +19,8 @@ interface AICoachViewProps {
   trips: Trip[];
   fuelRecords: FuelRecord[];
   electricityRecords: ElectricityRecord[];
+  challenges: Challenge[];
+  userChallenges: UserChallenge[];
 }
 
 interface Message {
@@ -32,7 +34,9 @@ export const AICoachView: React.FC<AICoachViewProps> = ({
   profile,
   trips,
   fuelRecords,
-  electricityRecords
+  electricityRecords,
+  challenges,
+  userChallenges
 }) => {
   // Navigation & Interactive states
   const [isAuditing, setIsAuditing] = useState(false);
@@ -215,10 +219,26 @@ Ask me any questions about your carbon footprint, green routes, or energy-saving
     setInputText('');
     setChatLoading(true);
 
+    const enrichedUserChallenges = (userChallenges || []).map(uc => {
+      const detail = (challenges || []).find(c => c.id === uc.challenge_id);
+      return {
+        id: uc.id,
+        challenge_id: uc.challenge_id,
+        status: uc.status,
+        started_at: uc.started_at,
+        completed_at: uc.completed_at,
+        title: detail ? detail.title : 'Unknown Challenge',
+        description: detail ? detail.description : '',
+        category: detail ? detail.category : '',
+        points_reward: detail ? detail.points_reward : 0
+      };
+    });
+
     const context: CoachContext = {
       trips,
       fuelRecords,
       electricityRecords,
+      userChallenges: enrichedUserChallenges as any,
       profile: {
         full_name: profile?.full_name || 'Eco Buddy',
         points: profile?.points || 0,

@@ -998,13 +998,14 @@ export const db = {
     // Calculate carbon saved:
     // If user walked, biked, took public transit, how much carbon did they save?
     // Baseline car emission: 0.170 kg/km
+    const dist = (typeof distanceKm === 'number' && !isNaN(distanceKm)) ? distanceKm : parseFloat(distanceKm as any) || 0;
     const carFactor = 0.170;
     const modeFactor = TRANSPORT_EMISSION_FACTORS[mode] || 0;
     
     let savedCO2 = 0;
-    if (mode === 'walking' || mode === 'bicycle' || mode === 'bus' || mode === 'metro' || mode === 'train') {
-      savedCO2 = (carFactor - modeFactor) * distanceKm;
-      if (savedCO2 < 0) savedCO2 = 0;
+    if (mode === 'walking' || mode === 'bicycle' || mode === 'bike' || mode === 'bus' || mode === 'metro' || mode === 'train') {
+      savedCO2 = (carFactor - modeFactor) * dist;
+      if (savedCO2 < 0 || isNaN(savedCO2)) savedCO2 = 0;
     }
 
     // Reward points:
@@ -1013,148 +1014,171 @@ export const db = {
     // Logging trip: 10 base points
     let pointsEarned = 10; // baseline for logging
     if (mode === 'walking' || mode === 'bicycle') {
-      pointsEarned += Math.round(distanceKm * 2);
+      pointsEarned += Math.round(dist * 2);
     } else if (mode === 'bus' || mode === 'metro' || mode === 'train') {
-      pointsEarned += Math.round(distanceKm * 1);
+      pointsEarned += Math.round(dist * 1);
     }
 
-    if (shouldUseSupabase() && supabase) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+    try {
+      if (shouldUseSupabase() && supabase) {
+        const { data: { user }, error: authErr } = await supabase.auth.getUser();
+        if (authErr) throw authErr;
+        if (!user) throw new Error('Not authenticated in Supabase session');
 
-      // Update profile
-      const currentProfile = await this.getProfile();
-      
-      // Update streak if active within last 24h
-      const lastActive = currentProfile.last_active ? new Date(currentProfile.last_active) : null;
-      let newStreak = currentProfile.current_streak;
-      
-      if (lastActive) {
-        const diffMs = Date.now() - lastActive.getTime();
-        const diffHours = diffMs / (1000 * 60 * 60);
-        if (diffHours > 24 && diffHours <= 48) {
-          newStreak += 1;
-        } else if (diffHours > 48) {
+        // Update profile
+        const currentProfile = await this.getProfile();
+        
+        // Update streak if active within last 24h
+        const lastActive = currentProfile.last_active ? new Date(currentProfile.last_active) : null;
+        let newStreak = currentProfile.current_streak || 0;
+        
+        if (lastActive) {
+          const diffMs = Date.now() - lastActive.getTime();
+          const diffHours = diffMs / (1000 * 60 * 60);
+          if (diffHours > 24 && diffHours <= 48) {
+            newStreak += 1;
+          } else if (diffHours > 48) {
+            newStreak = 1;
+          }
+        } else {
           newStreak = 1;
         }
-      } else {
-        newStreak = 1;
-      }
 
-      await this.updateProfile({
-        points: currentProfile.points + pointsEarned,
-        carbon_saved_kg: Number((currentProfile.carbon_saved_kg + savedCO2).toFixed(2)),
-        current_streak: newStreak,
-        max_streak: Math.max(newStreak, currentProfile.max_streak),
-        last_active: new Date().toISOString()
-      });
-
-      // Upsert daily carbon score record
-      const { data: existingScore } = await supabase
-        .from('carbon_scores')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('date', todayStr)
-        .maybeSingle();
-
-      if (existingScore) {
-        const trans = Number((existingScore.transport_emissions + (distanceKm > 0 ? addedCO2 : 0)).toFixed(2));
-        const fuel = Number((existingScore.fuel_emissions + (distanceKm === 0 && mode === 'car' ? addedCO2 : 0)).toFixed(2));
-        const elec = Number((existingScore.electricity_emissions + (distanceKm === 0 && mode !== 'car' ? addedCO2 : 0)).toFixed(2));
+        const currentSaved = (currentProfile && typeof currentProfile.carbon_saved_kg === 'number' && !isNaN(currentProfile.carbon_saved_kg)) ? currentProfile.carbon_saved_kg : 0;
+        const currentPoints = (currentProfile && typeof currentProfile.points === 'number' && !isNaN(currentProfile.points)) ? currentProfile.points : 0;
         
-        await supabase
+        const nextSaved = Number((currentSaved + savedCO2).toFixed(2));
+        const nextPoints = currentPoints + pointsEarned;
+
+        console.log(`[db.updateDailyScoreAndCarbonSaved] Supabase Mode - Mode: ${mode}, Dist: ${dist} km, Points Earned: ${pointsEarned}, Current Saved: ${currentSaved} kg, Added Saved: ${savedCO2} kg, Next Saved: ${nextSaved} kg`);
+
+        await this.updateProfile({
+          points: nextPoints,
+          carbon_saved_kg: nextSaved,
+          current_streak: newStreak,
+          max_streak: Math.max(newStreak, currentProfile.max_streak || 0),
+          last_active: new Date().toISOString()
+        });
+
+        // Upsert daily carbon score record
+        const { data: existingScore } = await supabase
           .from('carbon_scores')
-          .update({
-            total_emissions_kg: Number((existingScore.total_emissions_kg + addedCO2).toFixed(2)),
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('date', todayStr)
+          .maybeSingle();
+
+        if (existingScore) {
+          const trans = Number((existingScore.transport_emissions + (dist > 0 ? addedCO2 : 0)).toFixed(2));
+          const fuel = Number((existingScore.fuel_emissions + (dist === 0 && mode === 'car' ? addedCO2 : 0)).toFixed(2));
+          const elec = Number((existingScore.electricity_emissions + (dist === 0 && mode !== 'car' ? addedCO2 : 0)).toFixed(2));
+          
+          const { error: updateErr } = await supabase
+            .from('carbon_scores')
+            .update({
+              total_emissions_kg: Number((existingScore.total_emissions_kg + addedCO2).toFixed(2)),
+              transport_emissions: trans,
+              fuel_emissions: fuel,
+              electricity_emissions: elec,
+              score: calculateCarbonScore(trans, fuel, elec)
+            })
+            .eq('id', existingScore.id);
+          if (updateErr) throw updateErr;
+        } else {
+          const { error: insertErr } = await supabase
+            .from('carbon_scores')
+            .insert({
+              user_id: user.id,
+              date: todayStr,
+              total_emissions_kg: addedCO2,
+              transport_emissions: dist > 0 ? addedCO2 : 0,
+              fuel_emissions: dist === 0 && mode === 'car' ? addedCO2 : 0,
+              electricity_emissions: dist === 0 && mode !== 'car' ? addedCO2 : 0,
+              score: calculateCarbonScore(
+                dist > 0 ? addedCO2 : 0,
+                dist === 0 && mode === 'car' ? addedCO2 : 0,
+                dist === 0 && mode !== 'car' ? addedCO2 : 0
+              )
+            });
+          if (insertErr) throw insertErr;
+        }
+      } else {
+        const profile = getLocal<UserProfile | null>('eb_profile', null);
+        if (!profile) throw new Error('No local profile found in localStorage');
+
+        // Streak logic
+        const lastActive = profile.last_active ? new Date(profile.last_active) : null;
+        let newStreak = profile.current_streak || 0;
+        
+        if (lastActive) {
+          const diffMs = Date.now() - lastActive.getTime();
+          const diffHours = diffMs / (1000 * 60 * 60);
+          if (diffHours > 20 && diffHours <= 48) { // 20h buffer
+            newStreak += 1;
+          } else if (diffHours > 48) {
+            newStreak = 1;
+          }
+        } else {
+          newStreak = 1;
+        }
+
+        const currentSaved = (profile && typeof profile.carbon_saved_kg === 'number' && !isNaN(profile.carbon_saved_kg)) ? profile.carbon_saved_kg : 0;
+        const currentPoints = (profile && typeof profile.points === 'number' && !isNaN(profile.points)) ? profile.points : 0;
+        
+        const nextSaved = Number((currentSaved + savedCO2).toFixed(2));
+        const nextPoints = currentPoints + pointsEarned;
+
+        console.log(`[db.updateDailyScoreAndCarbonSaved] Sandbox Mode - Mode: ${mode}, Dist: ${dist} km, Points Earned: ${pointsEarned}, Current Saved: ${currentSaved} kg, Added Saved: ${savedCO2} kg, Next Saved: ${nextSaved} kg`);
+
+        const updatedProfile = {
+          ...profile,
+          points: nextPoints,
+          carbon_saved_kg: nextSaved,
+          current_streak: newStreak,
+          max_streak: Math.max(newStreak, profile.max_streak || 0),
+          last_active: new Date().toISOString()
+        };
+        setLocal('eb_profile', updatedProfile);
+        this.checkAndAwardAchievements(updatedProfile.points);
+
+        // Local scores update
+        const scores = getLocal<CarbonScore[]>('eb_carbon_scores', []);
+        const index = scores.findIndex((s: CarbonScore) => s.date === todayStr);
+
+        if (index !== -1) {
+          const scoreObj = scores[index];
+          const trans = Number((scoreObj.transport_emissions + (dist > 0 ? addedCO2 : 0)).toFixed(2));
+          const fuel = Number((scoreObj.fuel_emissions + (dist === 0 && mode === 'car' ? addedCO2 : 0)).toFixed(2));
+          const elec = Number((scoreObj.electricity_emissions + (dist === 0 && mode !== 'car' ? addedCO2 : 0)).toFixed(2));
+          
+          scores[index] = {
+            ...scoreObj,
+            total_emissions_kg: Number((scoreObj.total_emissions_kg + addedCO2).toFixed(2)),
             transport_emissions: trans,
             fuel_emissions: fuel,
             electricity_emissions: elec,
             score: calculateCarbonScore(trans, fuel, elec)
-          })
-          .eq('id', existingScore.id);
-      } else {
-        await supabase
-          .from('carbon_scores')
-          .insert({
-            user_id: user.id,
+          };
+        } else {
+          scores.push({
+            id: `cs-today-${Date.now()}`,
+            user_id: profile.id,
             date: todayStr,
             total_emissions_kg: addedCO2,
-            transport_emissions: distanceKm > 0 ? addedCO2 : 0,
-            fuel_emissions: distanceKm === 0 && mode === 'car' ? addedCO2 : 0,
-            electricity_emissions: distanceKm === 0 && mode !== 'car' ? addedCO2 : 0,
+            transport_emissions: dist > 0 ? addedCO2 : 0,
+            fuel_emissions: dist === 0 && mode === 'car' ? addedCO2 : 0,
+            electricity_emissions: dist === 0 && mode !== 'car' ? addedCO2 : 0,
             score: calculateCarbonScore(
-              distanceKm > 0 ? addedCO2 : 0,
-              distanceKm === 0 && mode === 'car' ? addedCO2 : 0,
-              distanceKm === 0 && mode !== 'car' ? addedCO2 : 0
+              dist > 0 ? addedCO2 : 0,
+              dist === 0 && mode === 'car' ? addedCO2 : 0,
+              dist === 0 && mode !== 'car' ? addedCO2 : 0
             )
           });
-      }
-    } else {
-      const profile = getLocal<UserProfile | null>('eb_profile', null);
-      if (!profile) return;
-
-      // Streak logic
-      const lastActive = profile.last_active ? new Date(profile.last_active) : null;
-      let newStreak = profile.current_streak;
-      
-      if (lastActive) {
-        const diffMs = Date.now() - lastActive.getTime();
-        const diffHours = diffMs / (1000 * 60 * 60);
-        if (diffHours > 20 && diffHours <= 48) { // 20h buffer
-          newStreak += 1;
-        } else if (diffHours > 48) {
-          newStreak = 1;
         }
-      } else {
-        newStreak = 1;
+        setLocal('eb_carbon_scores', scores);
       }
-
-      const updatedProfile = {
-        ...profile,
-        points: profile.points + pointsEarned,
-        carbon_saved_kg: Number((profile.carbon_saved_kg + savedCO2).toFixed(2)),
-        current_streak: newStreak,
-        max_streak: Math.max(newStreak, profile.max_streak),
-        last_active: new Date().toISOString()
-      };
-      setLocal('eb_profile', updatedProfile);
-      this.checkAndAwardAchievements(updatedProfile.points);
-
-      // Local scores update
-      const scores = getLocal<CarbonScore[]>('eb_carbon_scores', []);
-      const index = scores.findIndex((s: CarbonScore) => s.date === todayStr);
-
-      if (index !== -1) {
-        const scoreObj = scores[index];
-        const trans = Number((scoreObj.transport_emissions + (distanceKm > 0 ? addedCO2 : 0)).toFixed(2));
-        const fuel = Number((scoreObj.fuel_emissions + (distanceKm === 0 && mode === 'car' ? addedCO2 : 0)).toFixed(2));
-        const elec = Number((scoreObj.electricity_emissions + (distanceKm === 0 && mode !== 'car' ? addedCO2 : 0)).toFixed(2));
-        
-        scores[index] = {
-          ...scoreObj,
-          total_emissions_kg: Number((scoreObj.total_emissions_kg + addedCO2).toFixed(2)),
-          transport_emissions: trans,
-          fuel_emissions: fuel,
-          electricity_emissions: elec,
-          score: calculateCarbonScore(trans, fuel, elec)
-        };
-      } else {
-        scores.push({
-          id: `cs-today-${Date.now()}`,
-          user_id: profile.id,
-          date: todayStr,
-          total_emissions_kg: addedCO2,
-          transport_emissions: distanceKm > 0 ? addedCO2 : 0,
-          fuel_emissions: distanceKm === 0 && mode === 'car' ? addedCO2 : 0,
-          electricity_emissions: distanceKm === 0 && mode !== 'car' ? addedCO2 : 0,
-          score: calculateCarbonScore(
-            distanceKm > 0 ? addedCO2 : 0,
-            distanceKm === 0 && mode === 'car' ? addedCO2 : 0,
-            distanceKm === 0 && mode !== 'car' ? addedCO2 : 0
-          )
-        });
-      }
-      setLocal('eb_carbon_scores', scores);
+    } catch (error) {
+      console.error('[db.updateDailyScoreAndCarbonSaved] Error updating daily carbon score/saved:', error);
     }
   },
 

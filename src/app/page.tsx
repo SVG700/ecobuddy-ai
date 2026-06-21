@@ -216,6 +216,8 @@ export default function Home() {
             trips={trips}
             fuelRecords={fuelRecords}
             electricityRecords={electricityRecords}
+            challenges={challenges}
+            userChallenges={userChallenges}
           />
         );
       case 'weekly-report':
@@ -226,6 +228,7 @@ export default function Home() {
             fuelRecords={fuelRecords}
             electricityRecords={electricityRecords}
             profile={profile}
+            challenges={challenges}
             userChallenges={userChallenges}
             refreshData={refreshUserData}
           />
