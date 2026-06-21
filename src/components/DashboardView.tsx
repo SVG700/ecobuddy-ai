@@ -238,6 +238,82 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }
   } as const;
 
+  // --- Environmental Impact Summary Calculations ---
+  const treesNeededToOffsetWeekly = Math.ceil(last7DaysEmissions / 0.42) || 0;
+
+  let trendLabel = 'Stable';
+  let trendColor = 'text-yellow-605 bg-yellow-500/10 dark:text-yellow-450 border-yellow-500/10';
+  let TrendIcon = TrendingUp;
+
+  if (weeklyChangePct < -2.0) {
+    trendLabel = 'Improving';
+    trendColor = 'text-emerald-605 bg-emerald-500/10 dark:text-emerald-450 border-emerald-500/10';
+    TrendIcon = TrendingDown;
+  } else if (weeklyChangePct > 2.0) {
+    trendLabel = 'Worsening';
+    trendColor = 'text-rose-605 bg-rose-500/10 dark:text-rose-455 border-rose-500/10';
+    TrendIcon = TrendingUp;
+  }
+
+  // --- Top Actionable Recommendation Calculations ---
+  const dynamicRec = (() => {
+    const totalEmissions = transportTotal + fuelTotal + electricityTotal;
+    const activeTripsCount = trips.filter(t => t.transport_mode === 'walking' || t.transport_mode === 'bicycle').length;
+    const incompleteChallenges = userChallenges.filter(uc => uc.status === 'active');
+
+    if (totalEmissions === 0) {
+      return {
+        title: "Log Your First Record",
+        body: "Your carbon dashboard is empty. Choose 'Travel' or 'Loggers' tabs to log your first commute trip, fuel refill, or utility usage meter reading to generate your baseline score.",
+        action: "Get Started",
+        tab: 'travel' as TabType
+      };
+    }
+
+    if (fuelTotal > electricityTotal && fuelTotal > transportTotal) {
+      return {
+        title: "Optimize Vehicle Commutes",
+        body: `Your vehicle fuel refills are the highest emission source (${((fuelTotal / totalEmissions) * 100).toFixed(0)}% of total). Combine your shopping errands, carpool, or switch 2 commutes to transit next week.`,
+        action: "Log Commute Mode",
+        tab: 'travel' as TabType
+      };
+    }
+
+    if (electricityTotal > transportTotal && electricityTotal > fuelTotal) {
+      return {
+        title: "Mitigate Utility Overhead",
+        body: `Electricity usage dominates your carbon profile at ${((electricityTotal / totalEmissions) * 100).toFixed(0)}%. Unplug television sets, microwave ovens, and computer routers overnight to eliminate phantom loads.`,
+        action: "Log Utilities",
+        tab: 'loggers' as TabType
+      };
+    }
+
+    if (activeTripsCount > 0) {
+      return {
+        title: "Sustain Active Transit Habits",
+        body: `Excellent work! You logged ${activeTripsCount} walking or cycling trip(s). Maintain this progress by substituting any vehicle trips under 3 km with physical movement.`,
+        action: "Track Active Ride",
+        tab: 'travel' as TabType
+      };
+    }
+
+    if (incompleteChallenges.length > 0) {
+      return {
+        title: "Claim Active Challenges",
+        body: `You have ${incompleteChallenges.length} active challenge(s) in progress. Completing them will significantly boost your points balance, streaks, and green habit levels.`,
+        action: "View Challenges",
+        tab: 'challenges' as TabType
+      };
+    }
+
+    return {
+      title: "Transition Commutes to Public Transit",
+      body: "Transport trips are currently your primary carbon footprint source. Swapping 2 solo car rides for public transit routes can offset up to 4.5 kg CO₂ next week.",
+      action: "Explore Travel Tab",
+      tab: 'travel' as TabType
+    };
+  })();
+
   return (
     <div className="space-y-6 pb-20 md:pb-6 relative">
       
@@ -469,6 +545,91 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </motion.div>
 
         </div>
+      </motion.div>
+
+      {/* Analytics Insights Section */}
+      <motion.div 
+        variants={gridContainer}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 md:grid-cols-2 gap-6"
+      >
+        {/* Card A: Environmental Impact Summary Card */}
+        <motion.div 
+          variants={cardItem}
+          whileHover={{ y: -4, scale: 1.01, transition: { duration: 0.2 } }}
+          className="flex flex-col p-6 rounded-3xl border border-zinc-150 bg-white dark:border-zinc-805/80 dark:bg-zinc-950/40 shadow-sm relative overflow-hidden group justify-between"
+        >
+          <div className="absolute -inset-px bg-gradient-to-tr from-emerald-500/0 to-emerald-500/0 group-hover:from-emerald-500/3 group-hover:to-teal-500/3 rounded-3xl transition duration-500 -z-10" />
+          <div>
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/50 pb-3 mb-4">
+              <h3 className="text-sm font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
+                <BrainCircuit className="h-4.5 w-4.5 text-emerald-500" />
+                Environmental Impact Summary
+              </h3>
+              <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${trendColor}`}>
+                <TrendIcon className="h-3 w-3" />
+                {trendLabel}
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Sustainability Score</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-extrabold text-zinc-800 dark:text-zinc-100">{currentScore}/100</span>
+                  <span className="text-[10px] font-bold text-zinc-400">(latest log)</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Monthly Footprint (Est.)</span>
+                <span className="text-sm font-extrabold text-zinc-800 dark:text-zinc-100">{currentMonthlyCO2.toFixed(1)} kg CO₂</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Equivalent Trees Needed</span>
+                <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{treesNeededToOffsetWeekly} trees</span>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed pt-2.5 border-t border-zinc-100 dark:border-zinc-850 mt-4">
+            🌳 Offset calculations assume a mature tree absorbs ~21.8 kg CO₂ per year. You require **{treesNeededToOffsetWeekly} trees** to actively absorb this week's footprint of **{last7DaysEmissions.toFixed(1)} kg CO₂**.
+          </p>
+        </motion.div>
+
+        {/* Card B: Top Actionable Recommendation Card */}
+        <motion.div 
+          variants={cardItem}
+          whileHover={{ y: -4, scale: 1.01, transition: { duration: 0.2 } }}
+          className="flex flex-col p-6 rounded-3xl border border-zinc-150 bg-white dark:border-zinc-805/80 dark:bg-zinc-950/40 shadow-sm relative overflow-hidden group justify-between"
+        >
+          <div className="absolute -inset-px bg-gradient-to-tr from-emerald-500/0 to-emerald-500/0 group-hover:from-emerald-500/3 group-hover:to-teal-500/3 rounded-3xl transition duration-500 -z-10" />
+          <div>
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/50 pb-3 mb-4">
+              <h3 className="text-sm font-black text-zinc-805 dark:text-zinc-200 flex items-center gap-2">
+                <Sparkles className="h-4.5 w-4.5 text-yellow-500 animate-pulse" />
+                Top Actionable Recommendation
+              </h3>
+              <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[9px] font-bold text-zinc-700 dark:text-zinc-300 border border-zinc-200/50 dark:border-zinc-700">AI INSIGHT</span>
+            </div>
+
+            <div>
+              <h4 className="text-xs sm:text-sm font-extrabold text-emerald-600 dark:text-emerald-400 mb-1.5">{dynamicRec.title}</h4>
+              <p className="text-zinc-650 dark:text-zinc-300 text-xs font-semibold leading-relaxed mb-4">
+                {dynamicRec.body}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setActiveTab(dynamicRec.tab)}
+            className="w-full py-2.5 bg-gradient-to-tr from-emerald-500 to-teal-500 text-zinc-950 font-extrabold text-xs rounded-xl shadow-md transition hover:scale-[1.01] active:scale-95 cursor-pointer text-center mt-2"
+          >
+            {dynamicRec.action}
+          </button>
+        </motion.div>
       </motion.div>
 
       {/* Analytics Charts section */}

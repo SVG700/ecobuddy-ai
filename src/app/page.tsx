@@ -203,6 +203,9 @@ export default function Home() {
             userChallenges={userChallenges}
             achievements={achievements}
             userAchievements={userAchievements}
+            trips={trips}
+            fuelRecords={fuelRecords}
+            electricityRecords={electricityRecords}
             refreshData={refreshUserData}
           />
         );
@@ -223,6 +226,7 @@ export default function Home() {
             fuelRecords={fuelRecords}
             electricityRecords={electricityRecords}
             profile={profile}
+            userChallenges={userChallenges}
             refreshData={refreshUserData}
           />
         );

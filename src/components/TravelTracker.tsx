@@ -165,39 +165,72 @@ export const TravelTracker: React.FC<TravelTrackerProps> = ({ trips, refreshData
       }, 1000);
     } else {
       if (!navigator.geolocation) {
-        setError('Geolocation is not supported by your browser. Defaulting to simulation mode.');
         setIsSimulated(true);
-        setActiveTrip(null);
-        stopTrackingResources();
-        return;
+        setError('GPS unavailable. Switched to simulated travel mode.');
+        
+        let speed = 0.011;
+        if (selectedMode === 'walking') speed = 0.0013;
+        else if (selectedMode === 'bicycle') speed = 0.0035;
+
+        if (simulationRef.current !== null) {
+          clearInterval(simulationRef.current);
+        }
+        simulationRef.current = setInterval(() => {
+          setLiveDistance(prev => Number((prev + speed * (0.8 + Math.random() * 0.4)).toFixed(3)));
+        }, 1000);
+      } else {
+        const options = {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        };
+
+        watchIdRef.current = navigator.geolocation.watchPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            if (lastCoordsRef.current) {
+              const dist = getHaversineDistance(
+                lastCoordsRef.current.lat,
+                lastCoordsRef.current.lng,
+                latitude,
+                longitude
+              );
+              setLiveDistance(prev => Number((prev + dist).toFixed(3)));
+            }
+            lastCoordsRef.current = { lat: latitude, lng: longitude };
+          },
+          (err) => {
+            console.error('GPS tracking error:', err);
+            if (
+              err.code === err.PERMISSION_DENIED ||
+              err.code === err.POSITION_UNAVAILABLE ||
+              err.code === err.TIMEOUT
+            ) {
+              setIsSimulated(true);
+              setError('GPS unavailable. Switched to simulated travel mode.');
+              
+              if (watchIdRef.current !== null) {
+                navigator.geolocation.clearWatch(watchIdRef.current);
+                watchIdRef.current = null;
+              }
+
+              let speed = 0.011;
+              if (selectedMode === 'walking') speed = 0.0013;
+              else if (selectedMode === 'bicycle') speed = 0.0035;
+
+              if (simulationRef.current !== null) {
+                clearInterval(simulationRef.current);
+              }
+              simulationRef.current = setInterval(() => {
+                setLiveDistance(prev => Number((prev + speed * (0.8 + Math.random() * 0.4)).toFixed(3)));
+              }, 1000);
+            } else {
+              setError('Could not acquire GPS signal. Try using simulation mode.');
+            }
+          },
+          options
+        );
       }
-
-      const options = {
-        enableHighAccuracy: true,
-        timeout: 5000,
-        maximumAge: 0
-      };
-
-      watchIdRef.current = navigator.geolocation.watchPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          if (lastCoordsRef.current) {
-            const dist = getHaversineDistance(
-              lastCoordsRef.current.lat,
-              lastCoordsRef.current.lng,
-              latitude,
-              longitude
-            );
-            setLiveDistance(prev => Number((prev + dist).toFixed(3)));
-          }
-          lastCoordsRef.current = { lat: latitude, lng: longitude };
-        },
-        (err) => {
-          console.error('GPS tracking error:', err);
-          setError('Could not acquire GPS signal. Try using simulation mode.');
-        },
-        options
-      );
     }
 
     try {

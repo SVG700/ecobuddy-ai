@@ -6,7 +6,7 @@ import {
   Sparkles, Calendar, History, 
   Printer, Clipboard, FileText, ChevronRight, Leaf 
 } from 'lucide-react';
-import { WeeklyReport, Trip, FuelRecord, ElectricityRecord, UserProfile } from '../lib/types';
+import { WeeklyReport, Trip, FuelRecord, ElectricityRecord, UserProfile, UserChallenge } from '../lib/types';
 import { db } from '../lib/db';
 import { generateWeeklyReportAI } from '../lib/gemini';
 
@@ -16,6 +16,7 @@ interface WeeklyReportViewProps {
   fuelRecords: FuelRecord[];
   electricityRecords: ElectricityRecord[];
   profile: UserProfile | null;
+  userChallenges?: UserChallenge[];
   refreshData: () => void;
 }
 
@@ -61,11 +62,16 @@ export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
   fuelRecords,
   electricityRecords,
   profile,
+  userChallenges = [],
   refreshData
 }) => {
   const [selectedReport, setSelectedReport] = useState<WeeklyReport | null>(reports[0] || null);
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showExistModal, setShowExistModal] = useState(false);
+  const [pendingExistingReport, setPendingExistingReport] = useState<WeeklyReport | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Calculate stats for the current weekly cycle (last 7 days of raw data)
   const totalTripsCO2 = trips.reduce((acc, t) => acc + t.co2_emissions_kg, 0);
@@ -73,7 +79,7 @@ export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
   const totalElectricityCO2 = electricityRecords.reduce((acc, e) => acc + e.co2_emissions_kg, 0);
   const totalCO2ThisWeek = totalTripsCO2 + totalFuelCO2 + totalElectricityCO2;
 
-  const handleGenerateReport = async () => {
+  const handleGenerateReport = async (forceRegenerate = false) => {
     // 2. Detect whether a report already exists for the current user and week_start_date
     const now = new Date();
     const weekStartStr = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -81,20 +87,26 @@ export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
     console.log('[WeeklyReportView] Checking if report already exists for week:', weekStartStr);
     const existingReport = reports.find(r => r.week_start_date === weekStartStr);
     
-    if (existingReport) {
-      console.log('[WeeklyReportView] Report already exists. Loading existing report:', existingReport);
-      setSelectedReport(existingReport);
-      // 3. Do NOT call Gemini again. Do NOT attempt another INSERT.
+    if (existingReport && !forceRegenerate) {
+      console.log('[WeeklyReportView] Report already exists. Opening custom option modal.');
+      setPendingExistingReport(existingReport);
+      setShowExistModal(true);
       return;
     }
 
+    setShowExistModal(false);
     setGenerating(true);
+    setError(null);
+    setSuccessMsg(null);
+    const isUpdating = !!existingReport;
+
     try {
       // Build context payload
       const context = {
         trips,
         fuelRecords,
         electricityRecords,
+        userChallenges: userChallenges || [],
         profile: {
           full_name: profile?.full_name || 'Eco Buddy',
           points: profile?.points || 0,
@@ -116,11 +128,16 @@ export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
 
       setSelectedReport(newReport);
       refreshData();
+
+      // Show success notification
+      setSuccessMsg(isUpdating ? 'Report updated successfully.' : 'Report generated successfully.');
+      setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err: unknown) {
       const e = err as any;
       console.error('[WeeklyReportView] Failed to generate weekly report:', e);
       // 5. Replace generic error text with actual database/api error messages.
       const errorMsg = e?.message || e?.details || (typeof e === 'string' ? e : JSON.stringify(e)) || 'Unknown error';
+      setError(errorMsg);
       alert(`Could not compile weekly report: ${errorMsg}`);
     } finally {
       setGenerating(false);
@@ -242,7 +259,7 @@ export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          onClick={handleGenerateReport}
+          onClick={() => handleGenerateReport(false)}
           disabled={generating}
           className="w-full mb-5 py-3 bg-gradient-to-tr from-emerald-500 to-teal-500 hover:from-emerald-450 hover:to-teal-455 text-zinc-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md shadow-emerald-500/10 transition active:scale-95 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none cursor-pointer"
         >
@@ -295,6 +312,18 @@ export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
         variants={cardVariants}
         className="lg:col-span-3 p-6 sm:p-8 rounded-3xl border border-zinc-150 bg-white dark:border-zinc-800/80 dark:bg-zinc-950/40 shadow-sm print:border-none print:shadow-none print:bg-transparent"
       >
+        {successMsg && (
+          <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-450 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-sm">
+            <span>{successMsg}</span>
+            <button onClick={() => setSuccessMsg(null)} className="text-[10px] uppercase font-black hover:underline cursor-pointer border-none bg-transparent text-emerald-600 dark:text-emerald-450">Dismiss</button>
+          </div>
+        )}
+        {error && (
+          <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-sm">
+            <span>Could not compile report: {error}</span>
+            <button onClick={() => setError(null)} className="text-[10px] uppercase font-black hover:underline cursor-pointer border-none bg-transparent text-rose-500">Dismiss</button>
+          </div>
+        )}
         <AnimatePresence mode="wait">
           {generating ? (
             <motion.div
@@ -377,7 +406,7 @@ export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                onClick={handleGenerateReport}
+                onClick={() => handleGenerateReport(false)}
                 disabled={generating}
                 className="mt-6 px-6 py-3 bg-gradient-to-tr from-emerald-500 to-teal-500 text-zinc-950 font-extrabold text-xs rounded-xl shadow-md transition active:scale-95 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none cursor-pointer"
               >
@@ -409,6 +438,62 @@ export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
           animation: shimmer 1.5s infinite linear;
         }
       `}</style>
+
+      {/* Modal Overlay & Card */}
+      <AnimatePresence>
+        {showExistModal && pendingExistingReport && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowExistModal(false)}
+              className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm"
+            />
+            
+            {/* Modal Content */}
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative w-full max-w-md p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-xl z-10"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="modal-title"
+            >
+              <div className="flex items-center gap-3 mb-4 text-emerald-500">
+                <Leaf className="h-6 w-6 stroke-[2]" />
+                <h4 id="modal-title" className="font-extrabold text-zinc-900 dark:text-zinc-50 text-base sm:text-lg">
+                  Report Already Exists
+                </h4>
+              </div>
+              
+              <p className="text-zinc-650 dark:text-zinc-300 text-xs sm:text-sm font-medium mb-6 leading-relaxed">
+                A weekly report has already been compiled for this week ({new Date(pendingExistingReport.week_start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}). Would you like to view the existing report or regenerate a fresh data-driven analysis using your latest logs?
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setSelectedReport(pendingExistingReport);
+                    setShowExistModal(false);
+                  }}
+                  className="px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200 font-bold text-xs rounded-xl border border-zinc-200 dark:border-zinc-700 transition cursor-pointer"
+                >
+                  View Existing Report
+                </button>
+                <button
+                  onClick={() => handleGenerateReport(true)}
+                  className="px-4 py-2.5 bg-gradient-to-tr from-emerald-500 to-teal-500 hover:from-emerald-450 hover:to-teal-455 text-zinc-950 font-extrabold text-xs rounded-xl shadow-md transition cursor-pointer"
+                >
+                  Regenerate Report
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </motion.div>
   );

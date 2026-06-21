@@ -31,6 +31,7 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
   const [vehicleMileage, setVehicleMileage] = useState('14'); // default 14 km/L
   const [fuelLoading, setFuelLoading] = useState(false);
   const [fuelPreviewUrl, setFuelPreviewUrl] = useState<string | null>(null);
+  const [fuelError, setFuelError] = useState<string | null>(null);
   
   // Fuel Scanner states
   const [fuelScanning, setFuelScanning] = useState(false);
@@ -50,6 +51,7 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
   });
   const [billPreviewUrl, setBillPreviewUrl] = useState<string | null>(null);
   const [elecLoading, setElecLoading] = useState(false);
+  const [elecError, setElecError] = useState<string | null>(null);
   
   // Electricity Scanner states
   const [elecScanning, setElecScanning] = useState(false);
@@ -105,14 +107,35 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
   // Handle Fuel submit
   const handleFuelSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fuelLitres || !vehicleMileage) return;
+    setFuelError(null);
+    if (!fuelLitres) {
+      setFuelError('Fuel litres is required.');
+      return;
+    }
+    if (!vehicleMileage) {
+      setFuelError('Vehicle mileage is required.');
+      return;
+    }
+
+    const litres = parseFloat(fuelLitres);
+    const mileage = parseFloat(vehicleMileage);
+
+    if (isNaN(litres) || litres <= 0) {
+      setFuelError('Fuel litres must be greater than 0.');
+      return;
+    }
+
+    if (isNaN(mileage) || mileage <= 0) {
+      setFuelError('Vehicle mileage must be greater than 0.');
+      return;
+    }
 
     setFuelLoading(true);
     try {
       await db.addFuelRecord(
-        parseFloat(fuelLitres),
+        litres,
         fuelType,
-        parseFloat(vehicleMileage)
+        mileage
       );
       setFuelLitres('');
       setFuelPreviewUrl(null);
@@ -120,6 +143,7 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
       refreshData();
     } catch (error) {
       console.error('Error logging fuel:', error);
+      setFuelError('Failed to log fuel record.');
     } finally {
       setFuelLoading(false);
     }
@@ -168,12 +192,26 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
   // Handle Electricity submit
   const handleElecSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!elecUnits || !billMonth) return;
+    setElecError(null);
+    if (!elecUnits) {
+      setElecError('Electricity units is required.');
+      return;
+    }
+    if (!billMonth) {
+      setElecError('Billing month is required.');
+      return;
+    }
+
+    const units = parseFloat(elecUnits);
+    if (isNaN(units) || units <= 0) {
+      setElecError('Electricity units must be greater than 0.');
+      return;
+    }
 
     setElecLoading(true);
     try {
       await db.addElectricityRecord(
-        parseFloat(elecUnits),
+        units,
         billMonth,
         billPreviewUrl || undefined
       );
@@ -183,6 +221,7 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
       refreshData();
     } catch (error) {
       console.error('Error logging electricity:', error);
+      setElecError('Failed to log electricity record.');
     } finally {
       setElecLoading(false);
     }
@@ -197,7 +236,11 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
       {/* Subtab Toggle header */}
       <div className="flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-2xl border border-zinc-200/40 dark:border-zinc-800/60 shadow-sm max-w-md relative">
         <button
-          onClick={() => setActiveSubTab('fuel')}
+          onClick={() => {
+            setActiveSubTab('fuel');
+            setFuelError(null);
+            setElecError(null);
+          }}
           className={`relative flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-xl transition cursor-pointer z-10 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none ${
             activeSubTab === 'fuel' 
               ? 'text-emerald-600 dark:text-emerald-400 font-bold' 
@@ -215,7 +258,11 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
           Vehicle Fuel
         </button>
         <button
-          onClick={() => setActiveSubTab('electricity')}
+          onClick={() => {
+            setActiveSubTab('electricity');
+            setFuelError(null);
+            setElecError(null);
+          }}
           className={`relative flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-xl transition cursor-pointer z-10 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none ${
             activeSubTab === 'electricity' 
               ? 'text-emerald-600 dark:text-emerald-400 font-bold' 
@@ -279,7 +326,7 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
                 Log Fuel Refill
               </h3>
               
-              <form onSubmit={handleFuelSubmit} className="space-y-4">
+              <form onSubmit={handleFuelSubmit} noValidate className="space-y-4">
                 
                 {/* Receipt Upload area */}
                 <div>
@@ -382,10 +429,13 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
                       id="fuel-litres-input"
                       type="number"
                       step="0.01"
-                      min="0"
+                      min="0.01"
                       required
                       value={fuelLitres}
-                      onChange={(e) => setFuelLitres(e.target.value)}
+                      onChange={(e) => {
+                        setFuelLitres(e.target.value);
+                        if (fuelError) setFuelError(null);
+                      }}
                       placeholder="e.g. 35.5"
                       className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-800 placeholder-zinc-450 focus:border-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-100 dark:placeholder-zinc-650 transition"
                     />
@@ -403,13 +453,23 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
                       min="1"
                       required
                       value={vehicleMileage}
-                      onChange={(e) => setVehicleMileage(e.target.value)}
+                      onChange={(e) => {
+                        setVehicleMileage(e.target.value);
+                        if (fuelError) setFuelError(null);
+                      }}
                       placeholder="e.g. 14.5"
                       className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-800 placeholder-zinc-450 focus:border-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-100 dark:placeholder-zinc-650 transition"
                     />
                     <span className="absolute right-4 top-3 text-xs font-bold text-zinc-450">km/L</span>
                   </div>
                 </div>
+
+                {fuelError && (
+                  <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-xl flex items-center gap-2 text-xs font-semibold" role="alert">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{fuelError}</span>
+                  </div>
+                )}
 
                 <motion.button
                   whileHover={{ scale: 1.02 }}
@@ -532,7 +592,7 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
                 Log electricity Bill
               </h3>
 
-              <form onSubmit={handleElecSubmit} className="space-y-4">
+              <form onSubmit={handleElecSubmit} noValidate className="space-y-4">
                 
                 {/* Photo Upload area */}
                 <div>
@@ -618,17 +678,27 @@ export const LoggersView: React.FC<LoggersViewProps> = ({
                     <input
                       id="elec-units-input"
                       type="number"
-                      step="1"
-                      min="0"
+                      step="0.01"
+                      min="0.01"
                       required
                       value={elecUnits}
-                      onChange={(e) => setElecUnits(e.target.value)}
-                      placeholder="e.g. 150"
+                      onChange={(e) => {
+                        setElecUnits(e.target.value);
+                        if (elecError) setElecError(null);
+                      }}
+                      placeholder="e.g. 150.5"
                       className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-800 placeholder-zinc-450 focus:border-yellow-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-500 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-100 dark:placeholder-zinc-650 transition"
                     />
                     <span className="absolute right-4 top-3 text-xs font-bold text-zinc-450">kWh</span>
                   </div>
                 </div>
+
+                {elecError && (
+                  <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-xl flex items-center gap-2 text-xs font-semibold" role="alert">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{elecError}</span>
+                  </div>
+                )}
 
                 <motion.button
                   whileHover={{ scale: 1.02 }}

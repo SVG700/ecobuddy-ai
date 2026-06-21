@@ -258,4 +258,165 @@ describe('TravelTracker UI and Commute Flow integration tests', () => {
     expect(refreshDataMock).toHaveBeenCalled();
     expect(localStorage.getItem('eb_active_trip_distance')).toBeNull();
   });
+
+  describe('Graceful GPS permission failure handling', () => {
+    const mockWatchPosition = vi.fn();
+    const mockClearWatch = vi.fn();
+
+    beforeEach(() => {
+      vi.stubGlobal('navigator', {
+        geolocation: {
+          watchPosition: mockWatchPosition,
+          clearWatch: mockClearWatch,
+        }
+      });
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('gracefully handles PERMISSION_DENIED by switching to simulation and continuing tracking', async () => {
+      let errorCallback: any;
+      mockWatchPosition.mockImplementation((success, error, options) => {
+        errorCallback = error;
+        return 123;
+      });
+
+      let resolveStartTrip: any;
+      const startTripPromise = new Promise((resolve) => {
+        resolveStartTrip = resolve;
+      });
+      vi.mocked(db.startTrip).mockReturnValue(startTripPromise as any);
+
+      render(<TravelTracker trips={[]} refreshData={vi.fn()} />);
+
+      // Switch to GPS mode
+      const gpsButton = screen.getByText(/Live GPS Tracker/i);
+      fireEvent.click(gpsButton);
+
+      // Start commute
+      const startButton = screen.getByText(/Start Commute/i);
+      await act(async () => {
+        fireEvent.click(startButton);
+      });
+
+      // Trigger the PERMISSION_DENIED error callback
+      const mockError = {
+        code: 1, // PERMISSION_DENIED
+        PERMISSION_DENIED: 1,
+        POSITION_UNAVAILABLE: 2,
+        TIMEOUT: 3,
+        message: 'GPS permission denied',
+      };
+      await act(async () => {
+        errorCallback(mockError);
+      });
+
+      // Verify inline banner message is displayed
+      expect(screen.getByText(/GPS unavailable. Switched to simulated travel mode./i)).toBeInTheDocument();
+
+      // Verify clearWatch was called for watchId 123
+      expect(mockClearWatch).toHaveBeenCalledWith(123);
+
+      // Resolve database promise
+      const mockTrip = {
+        id: 'real-trip-456',
+        user_id: 'user-123',
+        transport_mode: 'car',
+        distance_km: 0,
+        duration_min: 0,
+        co2_emissions_kg: 0,
+        start_time: new Date().toISOString(),
+        active: true
+      };
+      await act(async () => {
+        resolveStartTrip(mockTrip);
+      });
+
+      // Advance timers by 3 seconds
+      await act(async () => {
+        vi.advanceTimersByTime(3000);
+      });
+
+      // Verify distance is no longer 0
+      expect(screen.queryAllByText('0.00').length).toBe(0);
+    });
+
+    it('gracefully handles TIMEOUT error by switching to simulation', async () => {
+      let errorCallback: any;
+      mockWatchPosition.mockImplementation((success, error, options) => {
+        errorCallback = error;
+        return 456;
+      });
+
+      let resolveStartTrip: any;
+      const startTripPromise = new Promise((resolve) => {
+        resolveStartTrip = resolve;
+      });
+      vi.mocked(db.startTrip).mockReturnValue(startTripPromise as any);
+
+      render(<TravelTracker trips={[]} refreshData={vi.fn()} />);
+
+      const gpsButton = screen.getByText(/Live GPS Tracker/i);
+      fireEvent.click(gpsButton);
+
+      const startButton = screen.getByText(/Start Commute/i);
+      await act(async () => {
+        fireEvent.click(startButton);
+      });
+
+      const mockError = {
+        code: 3, // TIMEOUT
+        PERMISSION_DENIED: 1,
+        POSITION_UNAVAILABLE: 2,
+        TIMEOUT: 3,
+        message: 'Timeout occurred',
+      };
+      await act(async () => {
+        errorCallback(mockError);
+      });
+
+      expect(screen.getByText(/GPS unavailable. Switched to simulated travel mode./i)).toBeInTheDocument();
+      expect(mockClearWatch).toHaveBeenCalledWith(456);
+    });
+
+    it('gracefully handles POSITION_UNAVAILABLE error by switching to simulation', async () => {
+      let errorCallback: any;
+      mockWatchPosition.mockImplementation((success, error, options) => {
+        errorCallback = error;
+        return 789;
+      });
+
+      let resolveStartTrip: any;
+      const startTripPromise = new Promise((resolve) => {
+        resolveStartTrip = resolve;
+      });
+      vi.mocked(db.startTrip).mockReturnValue(startTripPromise as any);
+
+      render(<TravelTracker trips={[]} refreshData={vi.fn()} />);
+
+      const gpsButton = screen.getByText(/Live GPS Tracker/i);
+      fireEvent.click(gpsButton);
+
+      const startButton = screen.getByText(/Start Commute/i);
+      await act(async () => {
+        fireEvent.click(startButton);
+      });
+
+      const mockError = {
+        code: 2, // POSITION_UNAVAILABLE
+        PERMISSION_DENIED: 1,
+        POSITION_UNAVAILABLE: 2,
+        TIMEOUT: 3,
+        message: 'Position unavailable',
+      };
+      await act(async () => {
+        errorCallback(mockError);
+      });
+
+      expect(screen.getByText(/GPS unavailable. Switched to simulated travel mode./i)).toBeInTheDocument();
+      expect(mockClearWatch).toHaveBeenCalledWith(789);
+    });
+  });
 });

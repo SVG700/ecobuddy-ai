@@ -7,7 +7,7 @@ import {
   Sparkles, Check, ChevronRight, Lock, BadgeCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { Challenge, UserChallenge, Achievement, UserAchievement } from '../lib/types';
+import { Challenge, UserChallenge, Achievement, UserAchievement, Trip, FuelRecord, ElectricityRecord } from '../lib/types';
 import { db } from '../lib/db';
 import { DynamicIcon } from './Icons';
 
@@ -16,6 +16,9 @@ interface ChallengesViewProps {
   userChallenges: UserChallenge[];
   achievements: Achievement[];
   userAchievements: UserAchievement[];
+  trips: Trip[];
+  fuelRecords: FuelRecord[];
+  electricityRecords: ElectricityRecord[];
   refreshData: () => void;
 }
 
@@ -24,6 +27,9 @@ export const ChallengesView: React.FC<ChallengesViewProps> = ({
   userChallenges,
   achievements,
   userAchievements,
+  trips = [],
+  fuelRecords = [],
+  electricityRecords = [],
   refreshData
 }) => {
   const [activeTab, setActiveTab] = useState<'challenges' | 'achievements'>('challenges');
@@ -57,6 +63,58 @@ export const ChallengesView: React.FC<ChallengesViewProps> = ({
   // Split user challenges
   const activeUCs = userChallenges.filter(uc => uc.status === 'active');
   const completedUCs = userChallenges.filter(uc => uc.status === 'completed');
+
+  // Challenge verification helper against logged data
+  const verifyChallenge = (challengeId: string): { eligible: boolean; reason?: string } => {
+    if (challengeId === 'ch-1') {
+      const hasEcoTrip = trips.some(t => 
+        t.transport_mode === 'walking' || 
+        t.transport_mode === 'bicycle' || 
+        t.transport_mode === 'bus' || 
+        t.transport_mode === 'train' ||
+        t.transport_mode === 'metro'
+      );
+      return {
+        eligible: hasEcoTrip,
+        reason: hasEcoTrip ? undefined : 'Requires at least 1 walking, cycling, bus, or train trip.'
+      };
+    }
+    if (challengeId === 'ch-2') {
+      const hasPublicTransport = trips.some(t => 
+        t.transport_mode === 'bus' || 
+        t.transport_mode === 'train' ||
+        t.transport_mode === 'metro'
+      );
+      return {
+        eligible: hasPublicTransport,
+        reason: hasPublicTransport ? undefined : 'Requires at least 1 public transport trip (bus, train, or metro).'
+      };
+    }
+    if (challengeId === 'ch-3') {
+      const hasElectricity = electricityRecords.length > 0;
+      return {
+        eligible: hasElectricity,
+        reason: hasElectricity ? undefined : 'Requires at least 1 electricity log.'
+      };
+    }
+    if (challengeId === 'ch-4') {
+      return { eligible: true };
+    }
+    if (challengeId === 'ch-5') {
+      const ecoCount = trips.filter(t => 
+        t.transport_mode === 'walking' || 
+        t.transport_mode === 'bicycle' || 
+        t.transport_mode === 'bus' || 
+        t.transport_mode === 'train' ||
+        t.transport_mode === 'metro'
+      ).length;
+      return {
+        eligible: ecoCount >= 3,
+        reason: ecoCount >= 3 ? undefined : `Requires at least 3 eco-friendly trips (current: ${ecoCount}/3).`
+      };
+    }
+    return { eligible: true };
+  };
 
   // Check if a specific challenge is active
   const isChallengeActive = (id: string) => {
@@ -220,6 +278,7 @@ export const ChallengesView: React.FC<ChallengesViewProps> = ({
                   {activeUCs.map((uc) => {
                     const challenge = challenges.find(c => c.id === uc.challenge_id);
                     if (!challenge) return null;
+                    const { eligible, reason } = verifyChallenge(challenge.id);
                     return (
                       <motion.div 
                         variants={listCard}
@@ -231,9 +290,21 @@ export const ChallengesView: React.FC<ChallengesViewProps> = ({
                           <div className="h-10 w-10 rounded-xl bg-orange-500/15 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0 border border-orange-500/20">
                             <DynamicIcon name={challenge.icon} className="h-5 w-5" />
                           </div>
-                          <div>
-                            <h4 className="font-extrabold text-sm text-zinc-800 dark:text-zinc-200">{challenge.title}</h4>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-extrabold text-sm text-zinc-800 dark:text-zinc-200">{challenge.title}</h4>
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border uppercase tracking-wider ${
+                                eligible 
+                                  ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/15' 
+                                  : 'bg-zinc-500/10 text-zinc-450 border-zinc-500/15 dark:text-zinc-450'
+                              }`}>
+                                {eligible ? 'Eligible' : 'Not Eligible'}
+                              </span>
+                            </div>
                             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">{challenge.description}</p>
+                            {!eligible && reason && (
+                              <p className="text-[10px] text-rose-500 font-semibold mt-1.5" role="note">⚠️ {reason}</p>
+                            )}
                           </div>
                         </div>
 
@@ -245,12 +316,12 @@ export const ChallengesView: React.FC<ChallengesViewProps> = ({
                           </div>
 
                           <motion.button
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => handleCompleteChallenge(challenge.id)}
-                            disabled={claimingId === challenge.id}
+                            whileHover={eligible ? { scale: 1.03 } : {}}
+                            whileTap={eligible ? { scale: 0.97 } : {}}
+                            onClick={() => eligible && handleCompleteChallenge(challenge.id)}
+                            disabled={claimingId === challenge.id || !eligible}
                             aria-label={`Claim points for ${challenge.title}`}
-                            className="flex items-center gap-1.5 px-4.5 py-2 text-xs font-bold bg-orange-500 hover:bg-orange-600 text-zinc-950 rounded-xl shadow-md shadow-orange-500/10 transition disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:outline-none cursor-pointer"
+                            className="flex items-center gap-1.5 px-4.5 py-2 text-xs font-bold bg-orange-500 hover:bg-orange-600 text-zinc-950 rounded-xl shadow-md shadow-orange-500/10 transition disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:outline-none cursor-pointer"
                           >
                             <CheckCircle2 className="h-4 w-4" />
                             {claimingId === challenge.id ? 'Claiming...' : 'Claim Points'}
@@ -332,10 +403,19 @@ export const ChallengesView: React.FC<ChallengesViewProps> = ({
                         )}
 
                         {isActive && (
-                          <span className="text-xs font-bold text-orange-500 flex items-center gap-1">
-                            <span className="h-1.5 w-1.5 rounded-full bg-orange-500 animate-ping"></span>
-                            In Progress
-                          </span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-xs font-bold text-orange-500 flex items-center gap-1">
+                              <span className="h-1.5 w-1.5 rounded-full bg-orange-500 animate-ping"></span>
+                              In Progress
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border uppercase tracking-wider ${
+                              verifyChallenge(c.id).eligible 
+                                ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/15' 
+                                : 'bg-zinc-500/10 text-zinc-450 border-zinc-500/15 dark:text-zinc-450'
+                            }`}>
+                              {verifyChallenge(c.id).eligible ? 'Eligible' : 'Not Eligible'}
+                            </span>
+                          </div>
                         )}
 
                         {isCompleted && (

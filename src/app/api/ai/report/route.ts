@@ -93,32 +93,68 @@ Here is the user's data context:
 - Trips Logged: ${JSON.stringify(context.trips)}
 - Fuel Records: ${JSON.stringify(context.fuelRecords)}
 - Electricity Records: ${JSON.stringify(context.electricityRecords)}
+- In-Progress/Completed Challenges: ${JSON.stringify(context.userChallenges || [])}
+
+Instructions:
+1. You MUST use and reference the actual logged trips, fuel records, electricity records, and challenge status in this report.
+2. You MUST NOT output generic recommendations. All insights and recommendations must reference the actual user data, specific numbers, and names.
+   - For example: if they logged 20L of fuel, suggest reducing that specific 20L fuel usage. If they logged 150kWh electricity, suggest reducing that specific 150kWh grid consumption.
+   - For completed challenges, congratulate them on those specific challenges by name.
+   - For incomplete/active challenges, reference those specific challenge names to encourage completion.
+3. Calculate and display:
+   - A sustainability score (0–100) based on their activities.
+   - A weekly grade (A+, A, B, C).
+4. The entire report must be under 700 words.
 
 Format your response EXACTLY with the following sections in Markdown:
 ## 📊 Weekly Sustainability Report: EcoBuddy AI
-*Prepared for [User Name] on [Date]*
+*Prepared for ${context.profile.full_name} on [Current Date]*
 
 ---
 
 ### 1. Emission Trends & Summary
-[A summary of emissions. Provide the total emission in kg CO2. Include a realistic trend percentage based on their carbon saved and activities, e.g. -12% decrease or +5% increase. Break down emissions by source (transport, fuel, electricity) with bullet points.]
+[Provide total emissions in kg CO2 and carbon saved in kg CO2. Include a realistic trend percentage based on user activity compared to baseline. Break down emissions by source (transport, fuel, electricity) with bullet points.
+Under a sub-heading "#### Data-Driven Carbon Insights", output:
+- **Highest Carbon Contributor:** [Identify which source had the highest emissions and its percentage of the total]
+- **Estimated Monthly Projection:** [Calculate total weekly emission * 4] kg CO2
+- **Potential Carbon Savings with Habit Improvement:**
+  - If you improve by **10%**: Saves [weekly * 0.1] kg CO2 next week.
+  - If you improve by **20%**: Saves [weekly * 0.2] kg CO2 next week.
+  - If you improve by **30%**: Saves [weekly * 0.3] kg CO2 next week.]
 
 ---
 
 ### 2. Best Eco-Friendly Activities
-[Identify 2-3 green activities they did well, like walks, cycling, or low electricity usage. Congratulate them.]
+[Identify 2-3 green activities they did well from the logged data. Congratulate them. Reference specific logged trips, low electricity, or fuel refills by their exact amounts or modes. Praise them by name for specific completed challenges.]
 
 ---
 
 ### 3. Areas for Improvement
-[Highlight where they emitted the most CO2, and detail why (e.g. car travels or high electricity consumption).]
+[Highlight where they emitted the most CO2 and detail why using actual figures. Critically analyze their transport, fuel, or electricity data. Reference their incomplete challenges by their specific names, explaining how finishing them will help.]
 
 ---
 
-### 4. AI-Generated Action Plan
-[Provide a list of 3-4 highly actionable items for next week to reduce their carbon footprint, estimating potential carbon savings for each. E.g., 'Switch 2 car trips to public transit (saves ~5 kg CO2)'.]
+### 4. Personalized Sustainability Score & Weekly Grade
+*   **Weekly Grade:** **[A+, A, B, or C]**
+*   **Score:** **[Output a score out of 100 based on their weekly metrics. Start at 100, deduct for high emissions, add for carbon saved, streak, and active commutes.]/100**
+*   **Analysis:** [Provide a descriptive grade analysis in 2-3 sentences.]
 
-Make it inspiring, highly personalized, and direct. Keep the length moderate.`;
+---
+
+### 5. Projected Impact Next Week
+*   📉 **Potential CO₂ Reduction:** [Output expected CO2 saved if they execute the action plan, e.g., 20% of their footprint] kg CO₂
+*   🪙 **Potential Points Increase:** [Estimate points they can gain next week, including +25 for compiling/reading reports, plus points from completing their active/in-progress challenges] points
+*   🔥 **Potential Streak Goal:** Reach [current_streak + 7] days by logging green activities daily next week.
+
+---
+
+### 6. AI-Generated Action Plan
+[Provide a list of 3-4 numbered actionable items tailored to their real behavior.
+- Reference specific values, e.g., "Reduce your logged 20L petrol consumption...".
+- Reference specific incomplete/active challenge names, e.g., "Complete the in-progress 'Save Electricity Challenge'...".
+Include realistic estimated CO2 savings in kg for each action item.]
+
+Make it inspiring, highly personalized, and direct. Keep the length under 700 words.`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text();

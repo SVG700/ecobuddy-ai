@@ -1,10 +1,11 @@
-import { Trip, FuelRecord, ElectricityRecord } from './types';
+import { Trip, FuelRecord, ElectricityRecord, UserChallenge } from './types';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 
 export interface CoachContext {
   trips: Trip[];
   fuelRecords: FuelRecord[];
   electricityRecords: ElectricityRecord[];
+  userChallenges?: UserChallenge[];
   profile: {
     full_name: string;
     points: number;
@@ -124,57 +125,196 @@ export function generateHeuristicWeeklyReport(context: CoachContext): string {
   const isReduced = context.profile.carbon_saved_kg > 10;
   const trendPercent = isReduced ? -14.5 : 8.2;
   
-  // Custom categories list
-  const categories = [];
-  if (totalTripsCO2 > 0) categories.push(`Transportation (${totalTripsCO2.toFixed(1)} kg)`);
-  if (totalFuelCO2 > 0) categories.push(`Vehicle Fuel (${totalFuelCO2.toFixed(1)} kg)`);
-  if (totalElectricityCO2 > 0) categories.push(`Electricity (${totalElectricityCO2.toFixed(1)} kg)`);
-  
-  if (categories.length === 0) {
-    categories.push("No emissions recorded yet. Let's log some details!");
-  }
- 
   const trendText = trendPercent < 0 
     ? `📉 **${Math.abs(trendPercent)}% DECREASE** in emissions compared to last week. Phenomenal job!`
     : `📈 **${trendPercent}% INCREASE** in emissions compared to last week. Let's look at how to reverse this.`;
- 
+
+  // 1. Insights Calculations
+  const highestCarbonVal = Math.max(totalTripsCO2, totalFuelCO2, totalElectricityCO2);
+  let highestSource = 'Grid Electricity';
+  let largestContribPct = 0;
+  if (totalCO2 > 0) {
+    if (highestCarbonVal === totalTripsCO2) {
+      highestSource = 'Transportation / Commuting';
+      largestContribPct = (totalTripsCO2 / totalCO2) * 100;
+    } else if (highestCarbonVal === totalFuelCO2) {
+      highestSource = 'Vehicle Fuel Refills';
+      largestContribPct = (totalFuelCO2 / totalCO2) * 100;
+    } else {
+      highestSource = 'Grid Electricity';
+      largestContribPct = (totalElectricityCO2 / totalCO2) * 100;
+    }
+  }
+  
+  const monthlyProjection = totalCO2 * 4;
+  const savings10 = totalCO2 * 0.1;
+  const savings20 = totalCO2 * 0.2;
+  const savings30 = totalCO2 * 0.3;
+
+  // 2. Personalized Sustainability Score (0-100)
+  let sustainabilityScore = 100;
+  // Deduct for emissions: 0.5 points per kg CO2, max deduct 40
+  sustainabilityScore -= Math.min(40, totalCO2 * 0.5);
+  // Add for carbon saved: 1 point per kg CO2 saved, max add 20
+  sustainabilityScore += Math.min(20, context.profile.carbon_saved_kg);
+  // Add for active transport: 3 points per walking/cycling trip, max add 15
+  const activeCommuteTrips = context.trips.filter(t => t.transport_mode === 'walking' || t.transport_mode === 'bicycle');
+  sustainabilityScore += Math.min(15, activeCommuteTrips.length * 3);
+  // Add for streak: 2 points per streak day, max add 20
+  sustainabilityScore += Math.min(20, context.profile.current_streak * 2);
+  sustainabilityScore = Math.max(10, Math.min(100, Math.round(sustainabilityScore)));
+
+  // Weekly Grade
+  let grade = 'B';
+  if (sustainabilityScore >= 85) grade = 'A+';
+  else if (sustainabilityScore >= 70) grade = 'A';
+  else if (sustainabilityScore >= 50) grade = 'B';
+  else grade = 'C';
+
+  // Score description
+  let scoreGrade = 'Eco Practitioner 🌿';
+  let scoreExplainer = 'You are actively tracking your footprints. Keep completing challenges to reach the Champion tier!';
+  if (sustainabilityScore >= 85) {
+    scoreGrade = 'Elite Eco Champion 🏆';
+    scoreExplainer = 'Superb! Your low carbon intensity, active commutes, and high logging streak put you in the top 5% of green citizens.';
+  } else if (sustainabilityScore >= 70) {
+    scoreGrade = 'Green Ally 🍃';
+    scoreExplainer = 'Great effort! You are making active lifestyle changes. Reducing vehicle reliance can propel you to the top tier.';
+  } else if (sustainabilityScore < 50) {
+    scoreGrade = 'Carbon Watcher ⚠️';
+    scoreExplainer = 'Your carbon footprint is currently high relative to savings. Look at the Action Plan below to lower your emissions.';
+  }
+
+  // 3. Projected Impact Next Week
+  const targetCO2Reduction = totalCO2 * 0.2; // 20% reduction target
+  const potentialPoints = 25 + (context.userChallenges?.filter(uc => uc.status === 'active').length || 0) * 50;
+  const potentialStreak = context.profile.current_streak + 7;
+
+  // Static Challenge Title Helper
+  const getChallengeTitle = (id: string): string => {
+    const titles: Record<string, string> = {
+      'ch-1': 'No-Car Day',
+      'ch-2': 'Public Transport Week',
+      'ch-3': 'Save Electricity Challenge',
+      'ch-4': 'Carry Reusable Bottle',
+      'ch-5': 'Eco Commuter'
+    };
+    return titles[id] || id;
+  };
+
+  // Completed vs Incomplete challenges
+  const completedChallenges = context.userChallenges?.filter(uc => uc.status === 'completed') || [];
+  const activeChallenges = context.userChallenges?.filter(uc => uc.status === 'active') || [];
+
+  // Logged fuel/electricity figures
+  const totalLitres = context.fuelRecords.reduce((acc, f) => acc + f.litres, 0);
+  const totalKwh = context.electricityRecords.reduce((acc, e) => acc + e.units_kwh, 0);
+
+  // 4. Personalized Insights
+  const bestActivities: string[] = [];
+  const areasForImprovement: string[] = [];
+  const actionPlanItems: string[] = [];
+
+  // Congratulate on completed challenges
+  if (completedChallenges.length > 0) {
+    const names = completedChallenges.map(c => `"${getChallengeTitle(c.challenge_id)}"`).join(', ');
+    bestActivities.push(`🏆 **Completed Challenges:** Congratulations on successfully completing ${names}! Excellent commitment.`);
+  }
+
+  // Active travel praise
+  if (activeCommuteTrips.length > 0) {
+    bestActivities.push(`🚶‍♂️ **Active Commutes:** Logged ${activeCommuteTrips.length} walking/cycling trip(s), directly preventing fuel burn.`);
+  }
+
+  // Low emissions praise
+  if (totalCO2 < 30) {
+    bestActivities.push(`🌱 **Low Weekly Footprint:** Your total emission is exceptionally low at **${totalCO2.toFixed(1)} kg CO₂**.`);
+  } else {
+    bestActivities.push(`📊 **Logging History:** Tracked weekly activities to gain transparency into carbon drivers.`);
+  }
+
+  // Suggesting improvements
+  if (totalLitres > 0) {
+    areasForImprovement.push(`⛽ **Vehicle Fuel Usage:** Logged **${totalLitres.toFixed(1)}L** fuel causing **${totalFuelCO2.toFixed(1)} kg CO₂** emissions.`);
+    actionPlanItems.push(`Reduce your logged **${totalLitres.toFixed(1)}L** fuel consumption by carpooling or swapping one ride to public transit (saves ~6.0 kg CO₂).`);
+  } else {
+    actionPlanItems.push(`Stay car-free: Keep vehicle fuel refills at zero next week to maintain your minimal transport footprint.`);
+  }
+
+  if (totalKwh > 0) {
+    areasForImprovement.push(`⚡ **Grid Electricity:** Logged **${totalKwh.toFixed(1)} kWh** electricity causing **${totalElectricityCO2.toFixed(1)} kg CO₂** emissions.`);
+    actionPlanItems.push(`Reduce your logged **${totalKwh.toFixed(1)} kWh** grid energy draw by unplugging standby devices overnight (saves ~3.5 kg CO₂).`);
+  } else {
+    actionPlanItems.push(`Monitor home grid draw: Next week, plug in a power meter or log your grid units to keep tracking electricity emissions.`);
+  }
+
+  if (activeChallenges.length > 0) {
+    const challengeName = getChallengeTitle(activeChallenges[0].challenge_id);
+    areasForImprovement.push(`🎯 **Incomplete Challenges:** The "${challengeName}" challenge is still in progress.`);
+    actionPlanItems.push(`Complete the active **"${challengeName}"** challenge next week to claim points and build eco-habits.`);
+  } else {
+    actionPlanItems.push(`Join a new challenge: Go to the Challenges tab and join either "Save Electricity Challenge" or "No-Car Day" next week.`);
+  }
+
+  // Ensure up to 4 plan items
+  if (actionPlanItems.length < 4) {
+    actionPlanItems.push(`Maintain tracking streak: Log carbon metrics daily to increase your streak to **${potentialStreak} days**.`);
+  }
+
+  const finalActionItemsText = actionPlanItems.slice(0, 4).map((item, idx) => `${idx + 1}.  ${item}`).join('\n');
+
   return `## 📊 Weekly Sustainability Report: EcoBuddy AI
 *Prepared for ${name} on ${new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}*
- 
+
 ---
- 
+
 ### 1. Emission Trends & Summary
 *   **Total Weekly Carbon Footprint:** **${totalCO2.toFixed(1)} kg CO₂**
 *   **Carbon Saved:** **${context.profile.carbon_saved_kg.toFixed(1)} kg CO₂**
 *   **Current Trend:** ${trendText}
- 
+
 #### Breakdown by Source
 *   🚗 **Transport / Commuting:** ${totalTripsCO2.toFixed(1)} kg CO₂
 *   ⛽ **Vehicle Fuel Refills:** ${totalFuelCO2.toFixed(1)} kg CO₂
 *   ⚡ **Grid Electricity:** ${totalElectricityCO2.toFixed(1)} kg CO₂
- 
+
+#### Data-Driven Carbon Insights
+*   📈 **Highest Carbon Contributor:** ${highestSource} (${largestContribPct.toFixed(1)}% of total emissions).
+*   🔮 **Estimated Monthly Projection:** ${monthlyProjection.toFixed(1)} kg CO₂ (based on current weekly average).
+*   💡 **Potential Carbon Savings with Habit Improvement:**
+    *   If you improve by **10%**: Saves **${savings10.toFixed(1)} kg CO₂** next week.
+    *   If you improve by **20%**: Saves **${savings20.toFixed(1)} kg CO₂** next week.
+    *   If you improve by **30%**: Saves **${savings30.toFixed(1)} kg CO₂** next week.
+
 ---
- 
+
 ### 2. Best Eco-Friendly Activities
-*   **Transit substitution:** Choosing eco-friendly transport modes saved you carbon emissions.
-*   **Active Commutes:** Logged walking/bicycle trips provided health benefits and zero emissions.
-*   **Consistent Logging:** Active tracking helps raise awareness of daily actions.
- 
+${bestActivities.map(act => `*   ${act}`).join('\n')}
+
 ---
- 
+
 ### 3. Areas for Improvement
-*   **Reduce Car Travel:** Car trips represent a large portion of your transport footprint. Let's try replacing short car trips with transit.
-*   **Home Energy Loads:** Unplug heavy appliances on standby.
-*   **Complete Challenges:** You have active challenges. Completing them boosts points and builds habit streaks.
- 
+${areasForImprovement.map(area => `*   ${area}`).join('\n')}
+
 ---
- 
-### 4. AI-Generated Action Plan
-1.  **Commuting Strategy:** Replace at least **two solo car trips** with metro/bus transit or ride-share. Estimated savings: **4.5 kg CO₂**.
-2.  **Unplug Challenge:** Switch off your television, microwave, and computer routers at the socket before going to bed. Estimated savings: **0.8 kWh/day** (~0.7 kg CO₂/day).
-3.  **Eco-commute Day:** Walk or bike to any destination under **2 km**.
-4.  **Complete active challenges:** Finish the *Carry Reusable Bottle* challenge to claim your points.
- 
+
+### 4. Personalized Sustainability Score & Weekly Grade
+*   **Weekly Grade:** **${grade}**
+*   **Score:** **${sustainabilityScore}/100** (${scoreGrade})
+*   **Analysis:** ${scoreExplainer}
+
+---
+
+### 5. Projected Impact Next Week
+*   📉 **Potential CO₂ Reduction:** **${targetCO2Reduction.toFixed(1)} kg CO₂** (with 20% footprint optimization).
+*   🪙 **Potential Points Increase:** **+${potentialPoints} points** (including report rewards and active challenges).
+*   🔥 **Potential Streak Goal:** Reach **${potentialStreak} days** by continuing to log carbon metrics daily.
+
+---
+
+### 6. AI-Generated Action Plan
+${finalActionItemsText}
+
 *Let's make next week even greener, ${name.split(' ')[0]}! You've got this. 🌿*`;
 }
  
