@@ -78,7 +78,54 @@ export async function POST(request: Request) {
       );
     }
 
-    const { prompt, context } = await request.json();
+    let body: any;
+    try {
+      body = await request.json();
+    } catch (e) {
+      return NextResponse.json(
+        { error: 'Invalid JSON payload' },
+        { status: 400 }
+      );
+    }
+
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json(
+        { error: 'Payload must be a non-null object' },
+        { status: 400 }
+      );
+    }
+
+    const { prompt, context } = body;
+
+    if (typeof prompt !== 'string' || !prompt.trim()) {
+      return NextResponse.json(
+        { error: 'Missing or invalid parameter: prompt' },
+        { status: 400 }
+      );
+    }
+
+    if (!context || typeof context !== 'object') {
+      return NextResponse.json(
+        { error: 'Missing or invalid parameter: context' },
+        { status: 400 }
+      );
+    }
+
+    if (!context.profile || typeof context.profile !== 'object') {
+      return NextResponse.json(
+        { error: 'Missing or invalid parameter: context.profile' },
+        { status: 400 }
+      );
+    }
+
+    const trips = Array.isArray(context.trips) ? context.trips : [];
+    const fuelRecords = Array.isArray(context.fuelRecords) ? context.fuelRecords : [];
+    const electricityRecords = Array.isArray(context.electricityRecords) ? context.electricityRecords : [];
+    const fullName = typeof context.profile.full_name === 'string' ? context.profile.full_name : 'Eco Buddy';
+    const points = typeof context.profile.points === 'number' ? context.profile.points : 0;
+    const currentStreak = typeof context.profile.current_streak === 'number' ? context.profile.current_streak : 0;
+    const carbonSaved = typeof context.profile.carbon_saved_kg === 'number' ? context.profile.carbon_saved_kg : 0;
+    const goals = Array.isArray(context.profile.goals) ? context.profile.goals : [];
 
     const ai = new GoogleGenerativeAI(apiKey);
     // Use gemini-1.5-flash which is widely supported and super fast
@@ -89,14 +136,14 @@ Your job is to analyze the user's carbon footprint data and help them track, und
 Be encouraging, practical, and highly specific to their data. Do not use generic advice if their data provides details.
 
 Here is the user's current context:
-- Name: ${context.profile.full_name}
-- Points: ${context.profile.points}
-- Current Streak: ${context.profile.current_streak} days
-- Carbon Saved: ${context.profile.carbon_saved_kg} kg CO2
-- Goals: ${JSON.stringify(context.profile.goals)}
-- Trips Logged: ${JSON.stringify(context.trips)}
-- Fuel Records: ${JSON.stringify(context.fuelRecords)}
-- Electricity Records: ${JSON.stringify(context.electricityRecords)}
+- Name: ${fullName}
+- Points: ${points}
+- Current Streak: ${currentStreak} days
+- Carbon Saved: ${carbonSaved} kg CO2
+- Goals: ${JSON.stringify(goals)}
+- Trips Logged: ${JSON.stringify(trips)}
+- Fuel Records: ${JSON.stringify(fuelRecords)}
+- Electricity Records: ${JSON.stringify(electricityRecords)}
 
 Respond to the user's message: "${prompt}"
 Keep your response concise (under 250 words) and format it beautifully with clean Markdown (headings, lists, bold text).`;

@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ChallengesView } from '../components/ChallengesView';
 import { db } from '../lib/db';
+import { Challenge, Trip, ElectricityRecord } from '../lib/types';
 
 vi.mock('../lib/db', () => ({
   db: {
@@ -38,7 +39,7 @@ vi.mock('framer-motion', () => {
 describe('ChallengesView Verification and Claim Logic Tests', () => {
   const refreshDataMock = vi.fn();
 
-  const mockChallenges = [
+  const mockChallenges: Challenge[] = [
     {
       id: 'ch-1',
       title: 'No-Car Day',
@@ -111,7 +112,7 @@ describe('ChallengesView Verification and Claim Logic Tests', () => {
     });
 
     it('displays Eligible and enables claim button if at least one walking trip exists', async () => {
-      const trips = [
+      const trips: Trip[] = [
         {
           id: 'trip-1',
           user_id: 'user-123',
@@ -183,7 +184,7 @@ describe('ChallengesView Verification and Claim Logic Tests', () => {
     });
 
     it('displays Eligible and enables claim button if electricity log exists', async () => {
-      const elecLogs = [
+      const elecLogs: ElectricityRecord[] = [
         {
           id: 'elec-1',
           user_id: 'user-123',
@@ -232,7 +233,7 @@ describe('ChallengesView Verification and Claim Logic Tests', () => {
     ];
 
     it('displays Not Eligible and disables claim button if less than 3 eco trips exist', () => {
-      const trips = [
+      const trips: Trip[] = [
         {
           id: 'trip-1',
           user_id: 'user-123',
@@ -276,7 +277,7 @@ describe('ChallengesView Verification and Claim Logic Tests', () => {
     });
 
     it('displays Eligible and enables claim button if at least 3 eco-friendly trips exist', async () => {
-      const trips = [
+      const trips: Trip[] = [
         {
           id: 'trip-1',
           user_id: 'user-123',

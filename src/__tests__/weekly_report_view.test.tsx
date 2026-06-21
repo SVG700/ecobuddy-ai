@@ -1,9 +1,10 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { WeeklyReportView } from '../components/WeeklyReportView';
 import { db } from '../lib/db';
 import { generateWeeklyReportAI } from '../lib/gemini';
+import { UserProfile } from '../lib/types';
 
 // Mock the external dependency modules
 vi.mock('../lib/db', () => ({
@@ -28,7 +29,7 @@ afterAll(() => {
 });
 
 describe('WeeklyReportView Component tests', () => {
-  const mockProfile = {
+  const mockProfile: UserProfile = {
     id: 'user-123',
     email: 'test@example.com',
     full_name: 'Alex Green',
@@ -37,6 +38,7 @@ describe('WeeklyReportView Component tests', () => {
     max_streak: 5,
     carbon_saved_kg: 10,
     goals: [],
+    created_at: new Date().toISOString(),
   };
 
   const reports = [

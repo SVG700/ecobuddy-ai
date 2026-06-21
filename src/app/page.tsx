@@ -346,6 +346,8 @@ export default function Home() {
           <AnimatePresence>
             {speedDialOpen && (
               <motion.div
+                id="mobile-quick-action-menu"
+                role="menu"
                 initial={{ opacity: 0, scale: 0.85, y: 15 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.85, y: 15 }}
@@ -353,6 +355,7 @@ export default function Home() {
                 className="flex flex-col gap-2.5 bg-zinc-900/90 border border-emerald-500/20 p-2.5 rounded-2xl shadow-xl backdrop-blur-lg"
               >
                 <button
+                  role="menuitem"
                   onClick={() => {
                     setActiveTab('travel');
                     setSpeedDialOpen(false);
@@ -363,6 +366,7 @@ export default function Home() {
                   <span>Start Trip</span>
                 </button>
                 <button
+                  role="menuitem"
                   onClick={() => {
                     setActiveTab('loggers');
                     setSpeedDialOpen(false);
@@ -373,6 +377,7 @@ export default function Home() {
                   <span>Log Fuel</span>
                 </button>
                 <button
+                  role="menuitem"
                   onClick={() => {
                     setActiveTab('loggers');
                     setSpeedDialOpen(false);
@@ -387,6 +392,9 @@ export default function Home() {
           </AnimatePresence>
           <button
             onClick={() => setSpeedDialOpen(!speedDialOpen)}
+            aria-expanded={speedDialOpen}
+            aria-haspopup="true"
+            aria-controls="mobile-quick-action-menu"
             className="h-12 w-12 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition"
             title="Quick Action Menu"
           >

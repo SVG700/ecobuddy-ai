@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { UserProfile } from '../lib/types';
 import { LogOut, Flame, Award, Sun, Moon } from 'lucide-react';
@@ -74,9 +75,12 @@ export const Header: React.FC<HeaderProps> = ({ profile, onLogout, isDarkMode, o
               className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-500 text-zinc-950 font-bold text-sm shadow-md transition hover:scale-105 active:scale-95 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none cursor-pointer"
             >
               {profile.avatar_url ? (
-                <img 
+                <Image 
                   src={profile.avatar_url} 
-                  alt={profile.full_name} 
+                  alt={profile.full_name || 'User avatar'} 
+                  width={36}
+                  height={36}
+                  unoptimized
                   className="h-full w-full rounded-xl object-cover" 
                 />
               ) : (

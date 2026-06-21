@@ -78,22 +78,63 @@ export async function POST(request: Request) {
       );
     }
 
-    const { context } = await request.json();
+    let body: any;
+    try {
+      body = await request.json();
+    } catch (e) {
+      return NextResponse.json(
+        { error: 'Invalid JSON payload' },
+        { status: 400 }
+      );
+    }
+
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json(
+        { error: 'Payload must be a non-null object' },
+        { status: 400 }
+      );
+    }
+
+    const { context } = body;
+
+    if (!context || typeof context !== 'object') {
+      return NextResponse.json(
+        { error: 'Missing or invalid parameter: context' },
+        { status: 400 }
+      );
+    }
+
+    if (!context.profile || typeof context.profile !== 'object') {
+      return NextResponse.json(
+        { error: 'Missing or invalid parameter: context.profile' },
+        { status: 400 }
+      );
+    }
+
+    const trips = Array.isArray(context.trips) ? context.trips : [];
+    const fuelRecords = Array.isArray(context.fuelRecords) ? context.fuelRecords : [];
+    const electricityRecords = Array.isArray(context.electricityRecords) ? context.electricityRecords : [];
+    const userChallenges = Array.isArray(context.userChallenges) ? context.userChallenges : [];
+    const fullName = typeof context.profile.full_name === 'string' ? context.profile.full_name : 'Eco Buddy';
+    const points = typeof context.profile.points === 'number' ? context.profile.points : 0;
+    const currentStreak = typeof context.profile.current_streak === 'number' ? context.profile.current_streak : 0;
+    const carbonSaved = typeof context.profile.carbon_saved_kg === 'number' ? context.profile.carbon_saved_kg : 0;
+    const goals = Array.isArray(context.profile.goals) ? context.profile.goals : [];
 
     const ai = new GoogleGenerativeAI(apiKey);
     const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const prompt = `Generate a Weekly Sustainability Report.
 Here is the user's data context:
-- Name: ${context.profile.full_name}
-- Points: ${context.profile.points}
-- Current Streak: ${context.profile.current_streak} days
-- Carbon Saved: ${context.profile.carbon_saved_kg} kg CO2
-- Goals: ${JSON.stringify(context.profile.goals)}
-- Trips Logged: ${JSON.stringify(context.trips)}
-- Fuel Records: ${JSON.stringify(context.fuelRecords)}
-- Electricity Records: ${JSON.stringify(context.electricityRecords)}
-- In-Progress/Completed Challenges: ${JSON.stringify(context.userChallenges || [])}
+- Name: ${fullName}
+- Points: ${points}
+- Current Streak: ${currentStreak} days
+- Carbon Saved: ${carbonSaved} kg CO2
+- Goals: ${JSON.stringify(goals)}
+- Trips Logged: ${JSON.stringify(trips)}
+- Fuel Records: ${JSON.stringify(fuelRecords)}
+- Electricity Records: ${JSON.stringify(electricityRecords)}
+- In-Progress/Completed Challenges: ${JSON.stringify(userChallenges)}
 
 Instructions:
 1. You MUST use and reference the actual logged trips, fuel records, electricity records, and challenge status in this report.
@@ -108,7 +149,7 @@ Instructions:
 
 Format your response EXACTLY with the following sections in Markdown:
 ## 📊 Weekly Sustainability Report: EcoBuddy AI
-*Prepared for ${context.profile.full_name} on [Current Date]*
+*Prepared for ${fullName} on [Current Date]*
 
 ---
 
