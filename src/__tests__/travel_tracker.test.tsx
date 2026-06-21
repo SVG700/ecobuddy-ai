@@ -169,13 +169,13 @@ describe('TravelTracker UI and Commute Flow integration tests', () => {
       resolveStartTrip(mockTrip);
     });
 
-    // Advance fake timers by 3 seconds
+    // Advance fake timers by 10 seconds to ensure stats advance beyond rounding thresholds
     await act(async () => {
-      vi.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(10000);
     });
 
     // Verify duration counter increments
-    expect(screen.getByText('00:03')).toBeInTheDocument();
+    expect(screen.getByText('00:10')).toBeInTheDocument();
 
     // Verify distance is no longer 0
     expect(screen.queryAllByText('0.00').length).toBe(0);

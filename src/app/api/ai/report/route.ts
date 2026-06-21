@@ -115,6 +115,7 @@ export async function POST(request: Request) {
     const fuelRecords = Array.isArray(context.fuelRecords) ? context.fuelRecords : [];
     const electricityRecords = Array.isArray(context.electricityRecords) ? context.electricityRecords : [];
     const userChallenges = Array.isArray(context.userChallenges) ? context.userChallenges : [];
+    const reports = Array.isArray(context.reports) ? context.reports : [];
     const fullName = typeof context.profile.full_name === 'string' ? context.profile.full_name : 'Eco Buddy';
     const points = typeof context.profile.points === 'number' ? context.profile.points : 0;
     const currentStreak = typeof context.profile.current_streak === 'number' ? context.profile.current_streak : 0;
@@ -135,10 +136,16 @@ Here is the user's data context:
 - Fuel Records: ${JSON.stringify(fuelRecords)}
 - Electricity Records: ${JSON.stringify(electricityRecords)}
 - In-Progress/Completed Challenges: ${JSON.stringify(userChallenges)}
+- Historical Reports: ${JSON.stringify(reports)}
 
 Safety & Reliability Rules:
 1. If any data (trips, fuel logs, electricity logs, challenges) is unavailable or empty, explicitly state that it is unavailable. Do NOT invent values or hallucinate activities.
-2. For challenges, always refer to the challenge titles (e.g. 'No-Car Day') provided in the userChallenges context. Never show or mention UUIDs like 'db7e1da0-...' to the user. Gemini should never receive or mention only challenge UUIDs. Update all report sections to reference challenge names instead of IDs.
+2. For emission trend: Compare the current week's emissions (which is the sum of total emissions of trips, fuel, and electricity logs) to the most recent historical report's total emissions in the Historical Reports list (if available).
+   - If no historical reports exist (Historical Reports list is empty), you MUST output exactly "Insufficient historical data to calculate trend." or "This is your first recorded week." Do NOT calculate, invent, or output a default trend percentage.
+   - If historical reports exist, compare the current week's total emissions to the most recent historical report's emissions to calculate the exact trend percentage.
+3. For highest carbon contributor: If all emissions (transport, fuel, electricity) are zero, you MUST output exactly "No emissions recorded this week." and do NOT output any percentage or name of contributor.
+4. For estimated monthly projections and potential savings: If all emissions are zero, do NOT invent projection percentages or values. Explicitly state "No projection available due to zero emissions."
+5. For challenges, always refer to the challenge titles (e.g. 'No-Car Day') provided in the userChallenges context. Never show or mention UUIDs like 'db7e1da0-...' to the user. Gemini should never receive or mention only challenge UUIDs. Update all report sections to reference challenge names instead of IDs.
 
 Report Personalization Requirements:
 - Include exact challenge names.
@@ -191,14 +198,13 @@ Format your response EXACTLY with the following sections in Markdown (maintain t
 ---
 
 ### 1. Emission Trends & Summary
-[Provide total emissions in kg CO2 and carbon saved in kg CO2. Include a realistic trend percentage based on user activity compared to baseline. Break down emissions by source (transport, fuel, electricity) with bullet points.
+[Provide total emissions in kg CO2 and carbon saved in kg CO2.
+For current trend, output either a calculated trend percentage comparing to the most recent report (e.g. "📉 15% DECREASE in emissions compared to last week.") OR if historical reports is empty/unavailable, output exactly "Insufficient historical data to calculate trend." or "This is your first recorded week.".
+Break down emissions by source (transport, fuel, electricity) with bullet points.
 Under a sub-heading "#### Data-Driven Carbon Insights", output:
-- **Highest Carbon Contributor:** [Identify which source had the highest emissions and its percentage of the total]
-- **Estimated Monthly Projection:** [Calculate total weekly emission * 4] kg CO2
-- **Potential Carbon Savings with Habit Improvement:**
-  - If you improve by **10%**: Saves [weekly * 0.1] kg CO2 next week.
-  - If you improve by **20%**: Saves [weekly * 0.2] kg CO2 next week.
-  - If you improve by **30%**: Saves [weekly * 0.3] kg CO2 next week.]
+- **Highest Carbon Contributor:** [Identify which source had the highest emissions and its percentage of the total. If all emissions are zero, output exactly "No emissions recorded this week." with no percentages.]
+- **Estimated Monthly Projection:** [If emissions are zero, output "No projection available due to zero emissions." otherwise calculate total weekly emissions * 4] kg CO2
+- **Potential Carbon Savings with Habit Improvement:** [If emissions are zero, output "No potential savings calculation available due to zero emissions." otherwise output savings of 10%, 20%, 30%]]
 
 ---
 

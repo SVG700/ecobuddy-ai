@@ -1,4 +1,4 @@
-import { Trip, FuelRecord, ElectricityRecord, UserChallenge } from './types';
+import { Trip, FuelRecord, ElectricityRecord, UserChallenge, WeeklyReport } from './types';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 
 export interface CoachContext {
@@ -6,6 +6,7 @@ export interface CoachContext {
   fuelRecords: FuelRecord[];
   electricityRecords: ElectricityRecord[];
   userChallenges?: UserChallenge[];
+  reports?: WeeklyReport[];
   profile: {
     full_name: string;
     points: number;
@@ -133,19 +134,44 @@ export function generateHeuristicWeeklyReport(context: CoachContext): string {
   const totalElectricityCO2 = electricityRecords.reduce((acc, e) => acc + (e.co2_emissions_kg || 0), 0);
   const totalCO2 = totalTripsCO2 + totalFuelCO2 + totalElectricityCO2;
   
-  // Decide emission trend (simulate a realistic trend based on history size)
-  const isReduced = (profile.carbon_saved_kg || 0) > 10;
-  const trendPercent = isReduced ? -14.5 : 8.2;
-  
-  const trendText = trendPercent < 0 
-    ? `📉 **${Math.abs(trendPercent)}% DECREASE** in emissions compared to last week. Phenomenal job!`
-    : `📈 **${trendPercent}% INCREASE** in emissions compared to last week. Let's look at how to reverse this.`;
+  // Decide emission trend comparing to last historical report (Issue 1)
+  const reports = Array.isArray(context.reports) ? context.reports : [];
+  let trendText = '';
+  if (reports.length === 0) {
+    trendText = 'Insufficient historical data to calculate trend.';
+  } else {
+    const sorted = [...reports].sort((a, b) => new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime());
+    const lastReport = sorted[0];
+    if (lastReport) {
+      const lastEmissions = lastReport.total_emissions_kg;
+      if (lastEmissions === 0) {
+        if (totalCO2 === 0) {
+          trendText = 'This is your first recorded week.';
+        } else {
+          trendText = 'Insufficient historical data to calculate trend.';
+        }
+      } else {
+        const diff = totalCO2 - lastEmissions;
+        const trendPercent = (diff / lastEmissions) * 100;
+        if (trendPercent < 0) {
+          trendText = `📉 **${Math.abs(trendPercent).toFixed(1)}% DECREASE** in emissions compared to last week. Phenomenal job!`;
+        } else if (trendPercent > 0) {
+          trendText = `📈 **${trendPercent.toFixed(1)}% INCREASE** in emissions compared to last week. Let's look at how to reverse this.`;
+        } else {
+          trendText = `➡️ **No change** in emissions compared to last week. Keep maintaining your green choices!`;
+        }
+      }
+    } else {
+      trendText = 'Insufficient historical data to calculate trend.';
+    }
+  }
 
-  // 1. Insights Calculations
+  // 1. Insights Calculations (Issue 2)
   const highestCarbonVal = Math.max(totalTripsCO2, totalFuelCO2, totalElectricityCO2);
-  let highestSource = 'Grid Electricity';
-  let largestContribPct = 0;
+  let highestSourceText = '';
   if (totalCO2 > 0) {
+    let highestSource = 'Grid Electricity';
+    let largestContribPct = 0;
     if (highestCarbonVal === totalTripsCO2) {
       highestSource = 'Transportation / Commuting';
       largestContribPct = (totalTripsCO2 / totalCO2) * 100;
@@ -156,12 +182,29 @@ export function generateHeuristicWeeklyReport(context: CoachContext): string {
       highestSource = 'Grid Electricity';
       largestContribPct = (totalElectricityCO2 / totalCO2) * 100;
     }
+    highestSourceText = `${highestSource} (${largestContribPct.toFixed(1)}% of total emissions).`;
+  } else {
+    highestSourceText = 'No emissions recorded this week.';
   }
   
-  const monthlyProjection = totalCO2 * 4;
-  const savings10 = totalCO2 * 0.1;
-  const savings20 = totalCO2 * 0.2;
-  const savings30 = totalCO2 * 0.3;
+  // Projections and Savings calculations (Issue 4)
+  let projectionText = '';
+  let savingsText = '';
+
+  if (totalCO2 > 0) {
+    const monthlyProjection = totalCO2 * 4;
+    const savings10 = totalCO2 * 0.1;
+    const savings20 = totalCO2 * 0.2;
+    const savings30 = totalCO2 * 0.3;
+
+    projectionText = `${monthlyProjection.toFixed(1)} kg CO₂ (based on current weekly average).`;
+    savingsText = `*   If you improve by **10%**: Saves **${savings10.toFixed(1)} kg CO₂** next week.
+    *   If you improve by **20%**: Saves **${savings20.toFixed(1)} kg CO₂** next week.
+    *   If you improve by **30%**: Saves **${savings30.toFixed(1)} kg CO₂** next week.`;
+  } else {
+    projectionText = 'No projection available due to zero emissions.';
+    savingsText = '*   No potential savings calculation available due to zero emissions.';
+  }
 
   // Completed vs Incomplete challenges
   const completedChallenges = userChallenges.filter(uc => uc.status === 'completed');
@@ -254,9 +297,9 @@ export function generateHeuristicWeeklyReport(context: CoachContext): string {
   // Fastest Way to Reduce
   let fastestWay = 'Log your transport, fuel, or electricity consumption next week to identify the fastest reduction pathways.';
   if (totalCO2 > 0) {
-    if (highestSource.includes('Fuel')) {
+    if (highestCarbonVal === totalFuelCO2) {
       fastestWay = `⛽ **Reduce Vehicle Fuel:** Swapping one driving commute for a walking/cycling trip or carpooling is the fastest way to reduce emissions, directly cutting your ${totalLitres.toFixed(1)}L fuel usage.`;
-    } else if (highestSource.includes('Electricity')) {
+    } else if (highestCarbonVal === totalElectricityCO2) {
       fastestWay = `⚡ **Cut Grid Power:** Unplugging background devices and optimizing thermostat usage is the fastest path to reduce your logged ${totalKwh.toFixed(1)} kWh grid draw.`;
     } else {
       fastestWay = `🚗 **Eco-friendly Travel:** Swap private car trips for walking, cycling, or public transport to target your transport footprint.`;
@@ -352,12 +395,10 @@ ${annualSavingsText}
 *   ⚡ **Grid Electricity:** ${totalElectricityCO2.toFixed(1)} kg CO₂
 
 #### Data-Driven Carbon Insights
-*   📈 **Highest Carbon Contributor:** ${highestSource} (${largestContribPct.toFixed(1)}% of total emissions).
-*   🔮 **Estimated Monthly Projection:** ${monthlyProjection.toFixed(1)} kg CO₂ (based on current weekly average).
+*   📈 **Highest Carbon Contributor:** ${highestSourceText}
+*   🔮 **Estimated Monthly Projection:** ${projectionText}
 *   💡 **Potential Carbon Savings with Habit Improvement:**
-    *   If you improve by **10%**: Saves **${savings10.toFixed(1)} kg CO₂** next week.
-    *   If you improve by **20%**: Saves **${savings20.toFixed(1)} kg CO₂** next week.
-    *   If you improve by **30%**: Saves **${savings30.toFixed(1)} kg CO₂** next week.
+    ${savingsText}
 
 ---
 

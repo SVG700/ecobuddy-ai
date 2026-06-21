@@ -138,6 +138,7 @@ export const WeeklyReportView: React.FC<WeeklyReportViewProps> = ({
         fuelRecords,
         electricityRecords,
         userChallenges: enrichedUserChallenges as any,
+        reports,
         profile: {
           full_name: profile?.full_name || 'Eco Buddy',
           points: profile?.points || 0,
